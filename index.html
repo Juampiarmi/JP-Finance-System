@@ -1,0 +1,1936 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
+<title>JP Finance System</title>
+<meta name="description" content="Sistema ejecutivo de finanzas personales — patrimonio, presupuestos y analítica proyectiva de nivel banca privada." />
+<meta name="theme-color" content="#090D16" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23090D16'/%3E%3Ctext x='16' y='21' font-family='Georgia,serif' font-size='13' font-weight='700' fill='%23D4AF7A' text-anchor='middle'%3EJP%3C/text%3E%3C/svg%3E" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet" />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          onyx: { 950: "#090D16", 900: "#0D1420", 850: "#111A2A", 800: "#16202F" },
+          champagne: { DEFAULT: "#D4AF7A", light: "#E8CFA0", dark: "#B8925A" },
+          cobalt: { DEFAULT: "#3B82F6" },
+          emerald: { metallic: "#10B981" },
+          crimson: { elegant: "#F43F5E" },
+        },
+        fontFamily: {
+          sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+          display: ['"Plus Jakarta Sans"', "ui-sans-serif", "sans-serif"],
+        },
+        boxShadow: {
+          glow: "0 0 0 1px rgba(255,255,255,0.04), 0 8px 24px -8px rgba(0,0,0,0.6)",
+          "glow-emerald": "0 0 24px -4px rgba(16,185,129,0.35)",
+          "glow-crimson": "0 0 24px -4px rgba(244,63,94,0.35)",
+          "glow-champagne": "0 0 24px -4px rgba(212,175,122,0.35)",
+          "glow-cobalt": "0 0 24px -4px rgba(59,130,246,0.35)",
+        },
+        keyframes: {
+          fadeIn: { from: { opacity: 0, transform: "translateY(4px)" }, to: { opacity: 1, transform: "translateY(0)" } },
+        },
+        animation: { "fade-in": "fadeIn .35s ease-out" },
+      },
+    },
+  };
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.446.0/dist/umd/lucide.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.6/babel.min.js"></script>
+
+<style>
+  html, body { background: #090D16; }
+  body {
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    color: #e5e9f0;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(59,130,246,0.08), transparent),
+      radial-gradient(ellipse 60% 40% at 100% 0%, rgba(212,175,122,0.06), transparent);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: rgba(212,175,122,0.25); }
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #1e2938; border-radius: 999px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .text-gradient-champagne {
+    background: linear-gradient(135deg, #f0dfb8 0%, #d4af7a 50%, #b8925a 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .glass-card { background: rgba(15,20,32,0.6); backdrop-filter: blur(16px); }
+  #root { min-height: 100vh; }
+  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
+</style>
+</head>
+<body class="bg-onyx-950">
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } = React;
+
+/* ============================================================================
+   HELPERS
+   ============================================================================ */
+function uid() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return Date.now() + "-" + Math.random().toString(36).slice(2, 10);
+}
+function formatCurrency(value, currency = "USD", locale = "es-AR") {
+  return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
+}
+function formatCompact(value, currency = "USD", locale = "es-AR") {
+  return new Intl.NumberFormat(locale, { style: "currency", currency, notation: "compact", maximumFractionDigits: 1 }).format(value || 0);
+}
+function formatPercent(value, decimals = 1) { return (value || 0).toFixed(decimals) + "%"; }
+function formatDate(dateISO, locale = "es-AR") {
+  const d = new Date(dateISO);
+  return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "short", year: "numeric" }).format(d);
+}
+function maskAmount() { return "••••••"; }
+function cx(...args) { return args.filter(Boolean).join(" "); }
+
+function monthKey(dateISO) { return (dateISO || "").slice(0, 7); }
+function lastNMonths(n) {
+  const months = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"));
+  }
+  return months;
+}
+function computeMonthlyTotals(transactions, months) {
+  return months.map((m) => {
+    const income = transactions.filter((t) => t.type === "income" && monthKey(t.date) === m).reduce((s, t) => s + t.amount, 0);
+    const expense = transactions.filter((t) => t.type === "expense" && monthKey(t.date) === m).reduce((s, t) => s + t.amount, 0);
+    return { month: m, income, expense, net: income - expense };
+  });
+}
+function computeKPIs(transactions, accounts) {
+  const totalAssets = accounts.filter((a) => a.isAsset).reduce((s, a) => s + a.balance, 0);
+  const totalLiabilities = accounts.filter((a) => !a.isAsset).reduce((s, a) => s + Math.abs(a.balance), 0);
+  const netWorth = totalAssets - totalLiabilities;
+  const currentMonth = monthKey(new Date().toISOString());
+  const monthTx = transactions.filter((t) => monthKey(t.date) === currentMonth);
+  const monthIncome = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  const monthExpense = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const monthlyCashFlow = monthIncome - monthExpense;
+  const savingsRate = monthIncome > 0 ? (monthlyCashFlow / monthIncome) * 100 : 0;
+  const last3 = computeMonthlyTotals(transactions, lastNMonths(3));
+  const avgMonthlyExpense = (last3.reduce((s, m) => s + m.expense, 0) / 3) || monthExpense || 1;
+  const liquidAssets = accounts.filter((a) => a.isAsset && ["checking", "savings", "cash"].includes(a.type)).reduce((s, a) => s + a.balance, 0);
+  const freedomRunwayMonths = avgMonthlyExpense > 0 ? liquidAssets / avgMonthlyExpense : 0;
+  return { netWorth, monthlyCashFlow, savingsRate, freedomRunwayMonths, totalAssets, totalLiabilities };
+}
+function computeEmergencyRunway(transactions, accounts) {
+  const last3 = computeMonthlyTotals(transactions, lastNMonths(3));
+  const monthExpenseNow = computeMonthlyTotals(transactions, [monthKey(new Date().toISOString())])[0].expense;
+  const avgMonthlyExpense = (last3.reduce((s, m) => s + m.expense, 0) / 3) || monthExpenseNow || 1;
+  const liquidAssets = accounts.filter((a) => a.isAsset && ["checking", "savings", "cash"].includes(a.type)).reduce((s, a) => s + a.balance, 0);
+  const months = avgMonthlyExpense > 0 ? liquidAssets / avgMonthlyExpense : 0;
+  const targetMonths = 6;
+  const percentToTarget = Math.min((months / targetMonths) * 100, 100);
+  let status = "Crítico", statusColor = "#F43F5E";
+  if (months >= 12) { status = "Excelente"; statusColor = "#10B981"; }
+  else if (months >= 6) { status = "Sólido"; statusColor = "#10B981"; }
+  else if (months >= 3) { status = "Ajustado"; statusColor = "#D4AF7A"; }
+  return { liquidAssets, avgMonthlyExpense, months, targetMonths, percentToTarget, status, statusColor };
+}
+function computeProjectedCashFlow(transactions) {
+  const now = new Date();
+  const cm = monthKey(now.toISOString());
+  const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const elapsedDays = now.getDate();
+  const monthTx = transactions.filter((t) => monthKey(t.date) === cm);
+  const income = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  const expense = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const pace = totalDays / Math.max(elapsedDays, 1);
+  const projectedIncome = income * pace;
+  const projectedExpense = expense * pace;
+  return {
+    income, expense, currentCashFlow: income - expense,
+    projectedIncome, projectedExpense, projectedCashFlow: projectedIncome - projectedExpense,
+    daysRemaining: Math.max(totalDays - elapsedDays, 0), totalDays, elapsedDays,
+  };
+}
+function computeCompoundInterest({ initial, monthlyContribution, annualRatePercent, years }) {
+  const monthlyRate = annualRatePercent / 100 / 12;
+  const points = [{ year: 0, contributions: 0, interest: 0, total: initial }];
+  let balance = initial, totalContrib = 0;
+  for (let year = 1; year <= years; year++) {
+    for (let m = 0; m < 12; m++) { balance = balance * (1 + monthlyRate) + monthlyContribution; totalContrib += monthlyContribution; }
+    points.push({ year, contributions: totalContrib, interest: Math.max(balance - initial - totalContrib, 0), total: balance });
+  }
+  return points;
+}
+function simulateDebtPayoff(debts, extraMonthlyPayment, strategy) {
+  const working = debts.map((d) => ({ ...d, remaining: d.balance }));
+  const sorted = [...working].sort((a, b) => strategy === "avalanche" ? b.interestRate - a.interestRate : a.balance - b.balance);
+  const months = []; const payoffOrder = [];
+  let month = 0, totalPaid = 0, totalInterest = 0;
+  const maxMonths = 600;
+  while (sorted.some((d) => d.remaining > 0.01) && month < maxMonths) {
+    month++;
+    let extra = extraMonthlyPayment;
+    for (const debt of sorted) {
+      if (debt.remaining <= 0) continue;
+      const monthlyInterest = (debt.interestRate / 100 / 12) * debt.remaining;
+      totalInterest += monthlyInterest; debt.remaining += monthlyInterest;
+      const payment = Math.min(debt.minimumPayment, debt.remaining);
+      debt.remaining -= payment; totalPaid += payment;
+    }
+    for (const debt of sorted) {
+      if (extra <= 0) break;
+      if (debt.remaining <= 0) continue;
+      const payment = Math.min(extra, debt.remaining);
+      debt.remaining -= payment; totalPaid += payment; extra -= payment;
+    }
+    for (const debt of sorted) {
+      if (debt.remaining <= 0.01 && !payoffOrder.find((p) => p.id === debt.id)) payoffOrder.push({ id: debt.id, name: debt.name, monthPaidOff: month });
+    }
+    months.push({ month, totalRemaining: sorted.reduce((s, d) => s + Math.max(d.remaining, 0), 0), totalPaid, totalInterest });
+  }
+  return { months, payoffOrder };
+}
+const RULE_502030 = { needs: 50, wants: 30, savings: 20 };
+
+/* ============================================================================
+   DEFAULT DATA
+   ============================================================================ */
+const DEFAULT_CATEGORIES = [
+  { id: "cat-salary", name: "Salario", color: "#10B981", type: "income", budgetGroup: "savings" },
+  { id: "cat-freelance", name: "Freelance", color: "#10B981", type: "income", budgetGroup: "savings" },
+  { id: "cat-investments", name: "Inversiones", color: "#3B82F6", type: "income", budgetGroup: "savings" },
+  { id: "cat-housing", name: "Vivienda", color: "#F43F5E", type: "expense", budgetGroup: "needs" },
+  { id: "cat-utilities", name: "Servicios", color: "#F43F5E", type: "expense", budgetGroup: "needs" },
+  { id: "cat-groceries", name: "Alimentación", color: "#F43F5E", type: "expense", budgetGroup: "needs" },
+  { id: "cat-transport", name: "Transporte", color: "#F43F5E", type: "expense", budgetGroup: "needs" },
+  { id: "cat-health", name: "Salud", color: "#F43F5E", type: "expense", budgetGroup: "needs" },
+  { id: "cat-dining", name: "Gastronomía", color: "#D4AF7A", type: "expense", budgetGroup: "wants" },
+  { id: "cat-entertainment", name: "Entretenimiento", color: "#D4AF7A", type: "expense", budgetGroup: "wants" },
+  { id: "cat-shopping", name: "Compras", color: "#D4AF7A", type: "expense", budgetGroup: "wants" },
+  { id: "cat-travel", name: "Viajes", color: "#D4AF7A", type: "expense", budgetGroup: "wants" },
+  { id: "cat-subscriptions", name: "Suscripciones", color: "#D4AF7A", type: "expense", budgetGroup: "wants" },
+  { id: "cat-savings", name: "Ahorro", color: "#3B82F6", type: "expense", budgetGroup: "savings" },
+  { id: "cat-investing", name: "Inversión", color: "#3B82F6", type: "expense", budgetGroup: "savings" },
+  { id: "cat-other", name: "Otros", color: "#94A3B8", type: "expense", budgetGroup: "wants" },
+];
+const DEFAULT_ACCOUNTS = [
+  { id: "acc-checking", name: "Cuenta Corriente", type: "checking", balance: 8500, isAsset: true },
+  { id: "acc-savings", name: "Caja de Ahorro", type: "savings", balance: 22000, isAsset: true },
+  { id: "acc-investment", name: "Portafolio de Inversión", type: "investment", balance: 45000, isAsset: true },
+  { id: "acc-credit", name: "Tarjeta de Crédito", type: "credit", balance: 3200, isAsset: false },
+];
+const DEFAULT_PROFILE = { fullName: "Juampi", currency: "USD", locale: "es-AR", hideBalances: false };
+const ACCOUNT_TYPE_LABEL = { checking: "Cuenta Corriente", savings: "Caja de Ahorro", investment: "Inversión", credit: "Crédito", cash: "Efectivo", other: "Otro" };
+const GOAL_TYPE_LABEL = { savings: "Ahorro", investment: "Inversión", "debt-payoff": "Cancelación de Deuda", purchase: "Compra Mayor" };
+const FREQ_LABEL = { weekly: "Semanal", biweekly: "Quincenal", monthly: "Mensual", yearly: "Anual" };
+
+function isoDaysAgo(days) { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().slice(0, 10); }
+function isoMonthsAgo(months, day = 5) { const d = new Date(); d.setMonth(d.getMonth() - months); d.setDate(day); return d.toISOString().slice(0, 10); }
+
+function buildSeedTransactions() {
+  const items = [];
+  for (let m = 5; m >= 0; m--) {
+    items.push(
+      { date: isoMonthsAgo(m, 1), description: "Salario Mensual", amount: 6200, type: "income", categoryId: "cat-salary", account: "Cuenta Corriente" },
+      { date: isoMonthsAgo(m, 15), description: "Proyecto Freelance", amount: 850, type: "income", categoryId: "cat-freelance", account: "Cuenta Corriente" },
+      { date: isoMonthsAgo(m, 3), description: "Alquiler", amount: 1800, type: "expense", categoryId: "cat-housing", account: "Cuenta Corriente" },
+      { date: isoMonthsAgo(m, 4), description: "Servicios (luz, gas, internet)", amount: 220, type: "expense", categoryId: "cat-utilities", account: "Cuenta Corriente" },
+      { date: isoMonthsAgo(m, 7), description: "Supermercado", amount: 480, type: "expense", categoryId: "cat-groceries", account: "Tarjeta de Crédito" },
+      { date: isoMonthsAgo(m, 9), description: "Combustible y transporte", amount: 160, type: "expense", categoryId: "cat-transport", account: "Cuenta Corriente" },
+      { date: isoMonthsAgo(m, 12), description: "Cena en restaurante", amount: 95, type: "expense", categoryId: "cat-dining", account: "Tarjeta de Crédito" },
+      { date: isoMonthsAgo(m, 18), description: "Streaming (Netflix, Spotify)", amount: 32, type: "expense", categoryId: "cat-subscriptions", account: "Tarjeta de Crédito", isRecurring: true, recurrence: { frequency: "monthly", nextDate: isoMonthsAgo(m - 1, 18), active: m === 0 } },
+      { date: isoMonthsAgo(m, 20), description: "Aporte a inversión", amount: 700, type: "expense", categoryId: "cat-investing", account: "Portafolio de Inversión" },
+      { date: isoMonthsAgo(m, 22), description: "Ahorro programado", amount: 400, type: "expense", categoryId: "cat-savings", account: "Caja de Ahorro" }
+    );
+  }
+  return items;
+}
+function buildSeedGoals() {
+  return [
+    { name: "Fondo de Emergencia", type: "savings", targetAmount: 20000, currentAmount: 12500, color: "#3B82F6" },
+    { name: "Viaje a Europa", type: "purchase", targetAmount: 6000, currentAmount: 2100, color: "#D4AF7A" },
+    { name: "Portafolio de Inversión", type: "investment", targetAmount: 100000, currentAmount: 45000, color: "#10B981" },
+  ];
+}
+function buildSeedDebts() {
+  return [
+    { name: "Tarjeta de Crédito", balance: 3200, originalBalance: 4500, interestRate: 65, minimumPayment: 200 },
+    { name: "Préstamo Personal", balance: 5400, originalBalance: 8000, interestRate: 38, minimumPayment: 280 },
+  ];
+}
+
+/* ============================================================================
+   LOCAL STORAGE LAYER
+   ============================================================================ */
+const KEYS = {
+  transactions: "jpfs:transactions", categories: "jpfs:categories", budgets: "jpfs:budgets",
+  goals: "jpfs:goals", debts: "jpfs:debts", accounts: "jpfs:accounts", profile: "jpfs:profile",
+  supabaseConfig: "jpfs:supabase-config", seeded: "jpfs:seeded",
+};
+function loadLocal(key, fallback) {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch (e) { return fallback; }
+}
+function saveLocal(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {} }
+function withSeed(key, seedBuilder) {
+  const raw = localStorage.getItem(key);
+  if (raw) { try { return JSON.parse(raw); } catch (e) { return []; } }
+  if (localStorage.getItem(KEYS.seeded)) return [];
+  return seedBuilder();
+}
+
+/* ============================================================================
+   ICON
+   ============================================================================ */
+function Icon({ name, size = 18, className = "", style = {} }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (window.lucide && ref.current) {
+      ref.current.innerHTML = "";
+      window.lucide.createIcons({ nameAttr: "data-lucide", icons: window.lucide.icons, attrs: {}, nodes: [ref.current] });
+    }
+  });
+  return <i ref={ref} data-lucide={name} className={className} style={{ width: size, height: size, display: "inline-block", ...style }}></i>;
+}
+
+/* ============================================================================
+   TOAST
+   ============================================================================ */
+const ToastContext = createContext(null);
+function ToastProvider({ children }) {
+  const [items, setItems] = useState([]);
+  const toast = useCallback(({ title, description, variant = "info" }) => {
+    const id = uid();
+    setItems((prev) => [...prev, { id, title, description, variant }]);
+    setTimeout(() => setItems((prev) => prev.filter((i) => i.id !== id)), 4000);
+  }, []);
+  const ICONS = { success: "check-circle-2", error: "x-circle", info: "info" };
+  const COLORS = { success: "text-emerald-metallic", error: "text-crimson-elegant", info: "text-cobalt" };
+  return (
+    <ToastContext.Provider value={{ toast }}>
+      {children}
+      <div className="fixed bottom-20 md:bottom-4 right-4 z-[100] flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-2">
+        {items.map((m) => (
+          <div key={m.id} className="flex items-start gap-3 rounded-lg border border-slate-800 bg-slate-950/95 backdrop-blur-xl p-4 shadow-2xl animate-fade-in">
+            <Icon name={ICONS[m.variant]} className={COLORS[m.variant]} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-slate-100">{m.title}</p>
+              {m.description && <p className="text-xs text-slate-500 mt-0.5">{m.description}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </ToastContext.Provider>
+  );
+}
+function useToast() { return useContext(ToastContext); }
+
+/* ============================================================================
+   CENTRO DE CONTROL — navegación global y accesos rápidos
+   ============================================================================ */
+const NavContext = createContext(null);
+function NavProvider({ children }) {
+  const [page, setPageState] = useState("dashboard");
+  const [quickAdd, setQuickAdd] = useState(null); // { type: 'income' | 'expense' } | null
+  const [transferOpen, setTransferOpen] = useState(false);
+
+  const setPage = useCallback((p) => { setPageState(p); if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" }); }, []);
+  const goHome = useCallback(() => setPage("dashboard"), [setPage]);
+  const openQuickAdd = useCallback((type) => setQuickAdd({ type }), []);
+  const closeQuickAdd = useCallback(() => setQuickAdd(null), []);
+  const openTransfer = useCallback(() => setTransferOpen(true), []);
+  const closeTransfer = useCallback(() => setTransferOpen(false), []);
+
+  const value = { page, setPage, goHome, quickAdd, openQuickAdd, closeQuickAdd, transferOpen, openTransfer, closeTransfer };
+  return <NavContext.Provider value={value}>{children}</NavContext.Provider>;
+}
+function useNav() { return useContext(NavContext); }
+
+/* ============================================================================
+   APP DATA STORE (LocalStorage + Supabase opcional)
+   ============================================================================ */
+const AppDataContext = createContext(null);
+function AppDataProvider({ children }) {
+  const [transactions, setTransactions] = useState(() => {
+    const now = new Date().toISOString();
+    return withSeed(KEYS.transactions, () => buildSeedTransactions().map((t) => ({ ...t, id: uid(), createdAt: now, updatedAt: now })));
+  });
+  const [categories, setCategories] = useState(() => loadLocal(KEYS.categories, DEFAULT_CATEGORIES));
+  const [budgets, setBudgets] = useState(() => loadLocal(KEYS.budgets, []));
+  const [goals, setGoals] = useState(() => {
+    const now = new Date().toISOString();
+    return withSeed(KEYS.goals, () => buildSeedGoals().map((g) => ({ ...g, id: uid(), createdAt: now })));
+  });
+  const [debts, setDebts] = useState(() => {
+    const now = new Date().toISOString();
+    return withSeed(KEYS.debts, () => buildSeedDebts().map((d) => ({ ...d, id: uid(), createdAt: now })));
+  });
+  const [accounts, setAccounts] = useState(() => loadLocal(KEYS.accounts, DEFAULT_ACCOUNTS));
+  const [profile, setProfile] = useState(() => loadLocal(KEYS.profile, DEFAULT_PROFILE));
+  const [supabaseConfig, setSupabaseConfig] = useState(() => loadLocal(KEYS.supabaseConfig, { url: "", anonKey: "" }));
+  const [cloudUser, setCloudUser] = useState(null);
+  const [cloudClient, setCloudClient] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const hydrated = useRef(false);
+
+  useEffect(() => { if (!localStorage.getItem(KEYS.seeded)) localStorage.setItem(KEYS.seeded, "1"); }, []);
+  useEffect(() => saveLocal(KEYS.transactions, transactions), [transactions]);
+  useEffect(() => saveLocal(KEYS.categories, categories), [categories]);
+  useEffect(() => saveLocal(KEYS.budgets, budgets), [budgets]);
+  useEffect(() => saveLocal(KEYS.goals, goals), [goals]);
+  useEffect(() => saveLocal(KEYS.debts, debts), [debts]);
+  useEffect(() => saveLocal(KEYS.accounts, accounts), [accounts]);
+  useEffect(() => saveLocal(KEYS.profile, profile), [profile]);
+  useEffect(() => saveLocal(KEYS.supabaseConfig, supabaseConfig), [supabaseConfig]);
+
+  // Inicializa el cliente de Supabase si hay credenciales guardadas
+  useEffect(() => {
+    if (!supabaseConfig.url || !supabaseConfig.anonKey || !window.supabase) { setCloudClient(null); return; }
+    try {
+      const client = window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey);
+      setCloudClient(client);
+      client.auth.getSession().then(({ data }) => setCloudUser(data.session ? data.session.user : null));
+      const { data: listener } = client.auth.onAuthStateChange((_e, session) => setCloudUser(session ? session.user : null));
+      return () => listener.subscription.unsubscribe();
+    } catch (e) { setCloudClient(null); }
+  }, [supabaseConfig.url, supabaseConfig.anonKey]);
+
+  // Hidratación desde la nube al iniciar sesión
+  useEffect(() => {
+    if (!cloudClient || !cloudUser || hydrated.current) return;
+    hydrated.current = true;
+    setSyncing(true);
+    (async () => {
+      try {
+        const [txRes, budRes, goalRes] = await Promise.all([
+          cloudClient.from("transactions").select("*").eq("user_id", cloudUser.id),
+          cloudClient.from("budgets").select("*").eq("user_id", cloudUser.id),
+          cloudClient.from("goals").select("*").eq("user_id", cloudUser.id),
+        ]);
+        if (txRes.data && txRes.data.length) {
+          setTransactions(txRes.data.map((r) => ({ id: r.id, date: r.date, description: r.description, amount: Number(r.amount), type: r.type, categoryId: r.category_id, account: r.account || "", notes: r.notes || undefined, isRecurring: r.is_recurring || false, recurrence: r.recurrence || undefined, createdAt: r.created_at, updatedAt: r.updated_at })));
+        }
+        if (budRes.data && budRes.data.length) {
+          setBudgets(budRes.data.map((r) => ({ id: r.id, categoryId: r.category_id, monthlyLimit: Number(r.monthly_limit), month: r.month })));
+        }
+        if (goalRes.data && goalRes.data.length) {
+          setGoals(goalRes.data.map((r) => ({ id: r.id, name: r.name, type: r.type, targetAmount: Number(r.target_amount), currentAmount: Number(r.current_amount), targetDate: r.target_date || undefined, color: r.color, createdAt: r.created_at })));
+        }
+      } catch (e) { console.warn("Sync error", e); }
+      setSyncing(false);
+    })();
+  }, [cloudClient, cloudUser]);
+
+  const pushCloud = useCallback((table, row) => {
+    if (!cloudClient || !cloudUser) return;
+    cloudClient.from(table).upsert({ ...row, user_id: cloudUser.id }).then(({ error }) => { if (error) console.warn(error); });
+  }, [cloudClient, cloudUser]);
+  const removeCloud = useCallback((table, id) => {
+    if (!cloudClient || !cloudUser) return;
+    cloudClient.from(table).delete().eq("id", id).eq("user_id", cloudUser.id).then(() => {});
+  }, [cloudClient, cloudUser]);
+
+  const addTransaction = useCallback((t) => {
+    const now = new Date().toISOString();
+    const newTx = { ...t, id: uid(), createdAt: now, updatedAt: now };
+    setTransactions((prev) => [newTx, ...prev]);
+    if (newTx.type !== "transfer") {
+      pushCloud("transactions", { id: newTx.id, date: newTx.date, description: newTx.description, amount: newTx.amount, type: newTx.type, category_id: newTx.categoryId, account: newTx.account, notes: newTx.notes || null, is_recurring: newTx.isRecurring || false, recurrence: newTx.recurrence || null, created_at: newTx.createdAt, updated_at: newTx.updatedAt });
+    }
+    return newTx;
+  }, [pushCloud]);
+  // Las transferencias entre cuentas se registran localmente (mueven saldo entre
+  // dos cuentas) y no se sincronizan a Supabase, ya que el esquema de la tabla
+  // `transactions` solo admite type in ('income','expense').
+  const addTransfer = useCallback((t) => {
+    const now = new Date().toISOString();
+    const newTx = { id: uid(), type: "transfer", date: t.date, description: (t.description && t.description.trim()) || "Transferencia interna", amount: t.amount, fromAccountId: t.fromAccountId, toAccountId: t.toAccountId, createdAt: now, updatedAt: now };
+    setTransactions((prev) => [newTx, ...prev]);
+    setAccounts((prev) => prev.map((a) => {
+      if (a.id === t.fromAccountId) return { ...a, balance: a.balance - t.amount };
+      if (a.id === t.toAccountId) return { ...a, balance: a.balance + t.amount };
+      return a;
+    }));
+    return newTx;
+  }, []);
+  const duplicateTransaction = useCallback((id) => {
+    const tx = transactions.find((t) => t.id === id);
+    if (!tx) return null;
+    if (tx.type === "transfer") {
+      return addTransfer({ date: new Date().toISOString().slice(0, 10), fromAccountId: tx.fromAccountId, toAccountId: tx.toAccountId, amount: tx.amount, description: tx.description });
+    }
+    return addTransaction({ date: new Date().toISOString().slice(0, 10), description: tx.description, amount: tx.amount, type: tx.type, categoryId: tx.categoryId, account: tx.account, notes: tx.notes, isRecurring: false, recurrence: undefined });
+    // eslint-disable-next-line
+  }, [transactions]);
+  const updateTransaction = useCallback((id, t) => {
+    const updatedAt = new Date().toISOString();
+    setTransactions((prev) => prev.map((tx) => tx.id === id ? { ...tx, ...t, updatedAt } : tx));
+    pushCloud("transactions", { id, ...(t.date !== undefined && { date: t.date }), ...(t.description !== undefined && { description: t.description }), ...(t.amount !== undefined && { amount: t.amount }), ...(t.type !== undefined && { type: t.type }), ...(t.categoryId !== undefined && { category_id: t.categoryId }), ...(t.account !== undefined && { account: t.account }), ...(t.notes !== undefined && { notes: t.notes }), ...(t.recurrence !== undefined && { recurrence: t.recurrence }), updated_at: updatedAt });
+  }, [pushCloud]);
+  const deleteTransaction = useCallback((id) => {
+    setTransactions((prev) => {
+      const tx = prev.find((t) => t.id === id);
+      if (tx && tx.type === "transfer") {
+        // Revierte el movimiento de saldo entre cuentas antes de borrar el registro
+        setAccounts((accPrev) => accPrev.map((a) => {
+          if (a.id === tx.fromAccountId) return { ...a, balance: a.balance + tx.amount };
+          if (a.id === tx.toAccountId) return { ...a, balance: a.balance - tx.amount };
+          return a;
+        }));
+      }
+      return prev.filter((t) => t.id !== id);
+    });
+    removeCloud("transactions", id);
+  }, [removeCloud]);
+  const bulkAddTransactions = useCallback((items) => {
+    const now = new Date().toISOString();
+    const newItems = items.map((t) => ({ ...t, id: uid(), createdAt: now, updatedAt: now }));
+    setTransactions((prev) => [...newItems, ...prev]);
+    newItems.forEach((newTx) => pushCloud("transactions", { id: newTx.id, date: newTx.date, description: newTx.description, amount: newTx.amount, type: newTx.type, category_id: newTx.categoryId, account: newTx.account, notes: newTx.notes || null, created_at: newTx.createdAt, updated_at: newTx.updatedAt }));
+    return newItems;
+  }, [pushCloud]);
+
+  const upsertBudget = useCallback((b) => {
+    setBudgets((prev) => {
+      const id = b.id || uid();
+      const newBudget = { ...b, id };
+      pushCloud("budgets", { id: newBudget.id, category_id: newBudget.categoryId, monthly_limit: newBudget.monthlyLimit, month: newBudget.month });
+      const idx = prev.findIndex((x) => x.id === id);
+      if (idx >= 0) { const copy = [...prev]; copy[idx] = newBudget; return copy; }
+      return [...prev, newBudget];
+    });
+  }, [pushCloud]);
+  const deleteBudget = useCallback((id) => { setBudgets((prev) => prev.filter((b) => b.id !== id)); removeCloud("budgets", id); }, [removeCloud]);
+
+  const addGoal = useCallback((g) => {
+    const newGoal = { ...g, id: uid(), createdAt: new Date().toISOString() };
+    setGoals((prev) => [...prev, newGoal]);
+    pushCloud("goals", { id: newGoal.id, name: newGoal.name, type: newGoal.type, target_amount: newGoal.targetAmount, current_amount: newGoal.currentAmount, target_date: newGoal.targetDate || null, color: newGoal.color, created_at: newGoal.createdAt });
+  }, [pushCloud]);
+  const updateGoal = useCallback((id, g) => {
+    setGoals((prev) => prev.map((goal) => goal.id === id ? { ...goal, ...g } : goal));
+    pushCloud("goals", { id, ...(g.name !== undefined && { name: g.name }), ...(g.currentAmount !== undefined && { current_amount: g.currentAmount }), ...(g.targetAmount !== undefined && { target_amount: g.targetAmount }) });
+  }, [pushCloud]);
+  const deleteGoal = useCallback((id) => { setGoals((prev) => prev.filter((g) => g.id !== id)); removeCloud("goals", id); }, [removeCloud]);
+
+  const addDebt = useCallback((d) => setDebts((prev) => [...prev, { ...d, id: uid(), createdAt: new Date().toISOString() }]), []);
+  const deleteDebt = useCallback((id) => setDebts((prev) => prev.filter((d) => d.id !== id)), []);
+
+  const addAccount = useCallback((a) => setAccounts((prev) => [...prev, { ...a, id: uid() }]), []);
+  const deleteAccount = useCallback((id) => setAccounts((prev) => prev.filter((a) => a.id !== id)), []);
+
+  const updateProfile = useCallback((p) => setProfile((prev) => ({ ...prev, ...p })), []);
+  const toggleHideBalances = useCallback(() => setProfile((prev) => ({ ...prev, hideBalances: !prev.hideBalances })), []);
+
+  const exportJSON = useCallback(() => JSON.stringify({ transactions, categories, budgets, goals, debts, accounts, profile, exportedAt: new Date().toISOString() }, null, 2), [transactions, categories, budgets, goals, debts, accounts, profile]);
+  const importJSON = useCallback((json) => {
+    try {
+      const p = JSON.parse(json);
+      if (p.transactions) setTransactions(p.transactions);
+      if (p.categories) setCategories(p.categories);
+      if (p.budgets) setBudgets(p.budgets);
+      if (p.goals) setGoals(p.goals);
+      if (p.debts) setDebts(p.debts);
+      if (p.accounts) setAccounts(p.accounts);
+      if (p.profile) setProfile((prev) => ({ ...prev, ...p.profile }));
+      return { success: true };
+    } catch (e) { return { success: false, error: "El archivo JSON no es válido." }; }
+  }, []);
+  const exportCSV = useCallback(() => {
+    const header = ["date", "description", "amount", "type", "categoryId", "account", "notes"];
+    const rows = transactions.map((t) => [t.date, '"' + (t.description || "").replace(/"/g, '""') + '"', t.amount, t.type, t.categoryId, t.account, t.notes || ""].join(","));
+    return [header.join(","), ...rows].join("\n");
+  }, [transactions]);
+  const importCSV = useCallback((csv) => {
+    try {
+      const lines = csv.trim().split("\n");
+      const [headerLine, ...rows] = lines;
+      const headers = headerLine.split(",").map((h) => h.trim());
+      const now = new Date().toISOString();
+      const parsed = rows.filter((r) => r.trim()).map((row) => {
+        const cols = row.match(/(".*?"|[^,]+)(?=,|$)/g) || [];
+        const obj = {};
+        headers.forEach((h, i) => { obj[h] = (cols[i] || "").replace(/^"|"$/g, "").replace(/""/g, '"'); });
+        return { id: uid(), date: obj.date, description: obj.description, amount: parseFloat(obj.amount) || 0, type: obj.type === "income" ? "income" : "expense", categoryId: obj.categoryId || "cat-other", account: obj.account || "Cuenta Corriente", notes: obj.notes || undefined, createdAt: now, updatedAt: now };
+      });
+      setTransactions((prev) => [...parsed, ...prev]);
+      return { success: true, imported: parsed.length };
+    } catch (e) { return { success: false, imported: 0, error: "No se pudo procesar el archivo CSV." }; }
+  }, []);
+
+  const signInWithEmail = useCallback(async (email) => {
+    if (!cloudClient) return { error: "Configurá primero tu URL y clave de Supabase." };
+    const { error } = await cloudClient.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+    return { error: error ? error.message : null };
+  }, [cloudClient]);
+  const signOut = useCallback(async () => { if (cloudClient) await cloudClient.auth.signOut(); }, [cloudClient]);
+
+  const value = {
+    transactions, categories, budgets, goals, debts, accounts, profile,
+    supabaseConfig, setSupabaseConfig, cloudUser, syncing, cloudEnabled: !!cloudClient,
+    addTransaction, updateTransaction, deleteTransaction, bulkAddTransactions, addTransfer, duplicateTransaction,
+    upsertBudget, deleteBudget, addGoal, updateGoal, deleteGoal, addDebt, deleteDebt,
+    addAccount, deleteAccount, updateProfile, toggleHideBalances,
+    exportJSON, importJSON, exportCSV, importCSV, signInWithEmail, signOut,
+  };
+  return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
+}
+function useApp() { return useContext(AppDataContext); }
+
+/* ============================================================================
+   UI PRIMITIVES
+   ============================================================================ */
+function Btn({ children, variant = "default", size = "default", className = "", ...props }) {
+  const variants = {
+    default: "bg-champagne text-onyx-950 hover:bg-champagne-light shadow-glow-champagne font-semibold",
+    primary: "bg-cobalt text-white hover:bg-cobalt/90 shadow-glow-cobalt",
+    secondary: "bg-slate-800/70 text-slate-100 hover:bg-slate-800 border border-slate-700",
+    outline: "border border-slate-700/80 bg-transparent hover:bg-slate-800/50 hover:border-slate-600 text-slate-100",
+    ghost: "hover:bg-slate-800/60 text-slate-200",
+    destructive: "bg-crimson-elegant/90 text-white hover:bg-crimson-elegant shadow-glow-crimson",
+  };
+  const sizes = { default: "h-10 px-4 text-sm", sm: "h-8 px-3 text-xs", lg: "h-12 px-8 text-base", icon: "h-10 w-10", "icon-sm": "h-8 w-8" };
+  return <button className={cx("inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none", variants[variant], sizes[size], className)} {...props}>{children}</button>;
+}
+function Card({ className = "", children, ...props }) { return <div className={cx("rounded-xl border border-slate-800/80 bg-gradient-to-b from-slate-900/80 to-slate-900/40 backdrop-blur-sm shadow-glow", className)} {...props}>{children}</div>; }
+function CardHeader({ className = "", children, ...props }) { return <div className={cx("flex flex-col space-y-1 p-5", className)} {...props}>{children}</div>; }
+function CardTitle({ className = "", children }) { return <h3 className={cx("text-sm font-medium text-slate-400 tracking-wide", className)}>{children}</h3>; }
+function CardDescription({ className = "", children }) { return <p className={cx("text-xs text-slate-500", className)}>{children}</p>; }
+function CardContent({ className = "", children, ...props }) { return <div className={cx("p-5 pt-0", className)} {...props}>{children}</div>; }
+
+function Input(props) { return <input {...props} className={cx("flex h-10 w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-champagne/40 focus:border-champagne/50 tabular-nums", props.className)} />; }
+function Textarea(props) { return <textarea {...props} className={cx("flex min-h-[70px] w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-champagne/40", props.className)} />; }
+function Label({ children, className = "" }) { return <label className={cx("text-xs font-medium text-slate-400 uppercase tracking-wider block mb-1.5", className)}>{children}</label>; }
+function Badge({ children, variant = "default", className = "" }) {
+  const variants = { default: "border-slate-700 bg-slate-800/60 text-slate-300", emerald: "border-emerald-metallic/30 bg-emerald-metallic/10 text-emerald-metallic", crimson: "border-crimson-elegant/30 bg-crimson-elegant/10 text-crimson-elegant", champagne: "border-champagne/30 bg-champagne/10 text-champagne", cobalt: "border-cobalt/30 bg-cobalt/10 text-cobalt" };
+  return <span className={cx("inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium", variants[variant], className)}>{children}</span>;
+}
+function Progress({ value = 0, colorClass = "bg-champagne", style = {} }) {
+  return (
+    <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-800/80">
+      <div className={cx("h-full rounded-full transition-all duration-500 ease-out", colorClass)} style={{ width: Math.min(Math.max(value, 0), 100) + "%", ...style }}></div>
+    </div>
+  );
+}
+function Switch({ checked, onChange }) {
+  return (
+    <button type="button" onClick={() => onChange(!checked)} className={cx("relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors", checked ? "bg-champagne" : "bg-slate-700")}>
+      <span className={cx("inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform", checked ? "translate-x-4.5" : "translate-x-0.5")} style={{ transform: checked ? "translateX(18px)" : "translateX(2px)" }}></span>
+    </button>
+  );
+}
+function Select({ value, onChange, children, className = "" }) {
+  return (
+    <div className="relative">
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={cx("flex h-10 w-full appearance-none rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-champagne/40 pr-9", className)}>
+        {children}
+      </select>
+      <Icon name="chevron-down" size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+    </div>
+  );
+}
+function Modal({ open, onClose, title, description, children, footer }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in" onClick={onClose}></div>
+      <div className="relative z-10 w-full max-w-lg rounded-xl border border-slate-800 bg-slate-950/95 backdrop-blur-xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-thin animate-fade-in">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold font-display text-slate-100">{title}</h3>
+            {description && <p className="text-sm text-slate-500 mt-1">{description}</p>}
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-200 shrink-0 ml-4"><Icon name="x" size={18} /></button>
+        </div>
+        {children}
+        {footer && <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-4 gap-2 sm:gap-0">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+function Tabs({ tabs, value, onChange }) {
+  return (
+    <div className="inline-flex items-center rounded-lg bg-slate-900/70 border border-slate-800 p-1 text-slate-400 gap-1">
+      {tabs.map((t) => (
+        <button key={t.value} onClick={() => onChange(t.value)} className={cx("px-3 py-1.5 rounded-md text-sm font-medium transition-all", value === t.value ? "bg-champagne text-onyx-950" : "text-slate-400 hover:text-slate-200")}>
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+function DropdownMenu({ trigger, children, align = "end" }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    function onDocClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <div onClick={() => setOpen((o) => !o)}>{trigger}</div>
+      {open && (
+        <div className={cx("absolute mt-2 min-w-[14rem] rounded-lg border border-slate-800 bg-slate-950/95 backdrop-blur-xl p-1 shadow-2xl z-50", align === "end" ? "right-0" : "left-0")} onClick={() => setOpen(false)}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+function MenuItem({ children, onClick }) { return <div onClick={onClick} className="flex items-center rounded-md px-2 py-2 text-sm text-slate-200 hover:bg-slate-800/70 cursor-pointer">{children}</div>; }
+function MenuLabel({ children }) { return <div className="px-2 py-1.5 text-xs font-medium text-slate-500 uppercase tracking-wider">{children}</div>; }
+function MenuSeparator() { return <div className="my-1 h-px bg-slate-800"></div>; }
+
+/* ============================================================================
+   CHARTS (Chart.js)
+   ============================================================================ */
+function useChart(canvasRef, config, deps) {
+  const chartRef = useRef(null);
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    if (chartRef.current) chartRef.current.destroy();
+    chartRef.current = new Chart(canvasRef.current.getContext("2d"), config);
+    return () => { if (chartRef.current) chartRef.current.destroy(); };
+    // eslint-disable-next-line
+  }, deps);
+}
+function DoughnutChart({ data, currency }) {
+  const canvasRef = useRef(null);
+  useChart(canvasRef, {
+    type: "doughnut",
+    data: { labels: data.map((d) => d.name), datasets: [{ data: data.map((d) => d.value), backgroundColor: data.map((d) => d.color), borderWidth: 0, spacing: 2 }] },
+    options: {
+      cutout: "68%", responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: "rgba(9,13,22,0.95)", borderColor: "rgba(148,163,184,0.2)", borderWidth: 1, padding: 10, callbacks: { label: (ctx) => formatCurrency(ctx.parsed, currency) } } },
+    },
+  }, [JSON.stringify(data), currency]);
+  return <canvas ref={canvasRef} height="240"></canvas>;
+}
+function BarChartCmp({ labels, income, expense, currency }) {
+  const canvasRef = useRef(null);
+  useChart(canvasRef, {
+    type: "bar",
+    data: { labels, datasets: [
+      { label: "Ingresos", data: income, backgroundColor: "#10B98199", borderRadius: 4, maxBarThickness: 26 },
+      { label: "Gastos", data: expense, backgroundColor: "#F43F5E99", borderRadius: 4, maxBarThickness: 26 },
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { grid: { display: false }, ticks: { color: "#64748b", font: { size: 11 } } },
+        y: { grid: { color: "rgba(148,163,184,0.08)" }, ticks: { color: "#64748b", font: { size: 11 }, callback: (v) => formatCompact(v, currency) } },
+      },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: "rgba(9,13,22,0.95)", borderColor: "rgba(148,163,184,0.2)", borderWidth: 1, padding: 10, callbacks: { label: (ctx) => ctx.dataset.label + ": " + formatCurrency(ctx.parsed.y, currency) } } },
+    },
+  }, [JSON.stringify(labels), JSON.stringify(income), JSON.stringify(expense), currency]);
+  return <canvas ref={canvasRef} height="260"></canvas>;
+}
+function AreaChartCmp({ labels, series, color, currency, xSuffix = "" }) {
+  const canvasRef = useRef(null);
+  useChart(canvasRef, {
+    type: "line",
+    data: { labels, datasets: [{ data: series, borderColor: color, borderWidth: 2, pointRadius: 0, tension: 0.35, fill: true,
+      backgroundColor: (ctx) => { const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 220); g.addColorStop(0, color + "66"); g.addColorStop(1, color + "00"); return g; } }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { grid: { display: false }, ticks: { color: "#64748b", font: { size: 11 }, callback: (v, i) => labels[i] + xSuffix } },
+        y: { grid: { color: "rgba(148,163,184,0.08)" }, ticks: { color: "#64748b", font: { size: 11 }, callback: (v) => formatCompact(v, currency) } },
+      },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: "rgba(9,13,22,0.95)", borderColor: "rgba(148,163,184,0.2)", borderWidth: 1, padding: 10, callbacks: { label: (ctx) => formatCurrency(ctx.parsed.y, currency) } } },
+    },
+  }, [JSON.stringify(labels), JSON.stringify(series), color, currency]);
+  return <canvas ref={canvasRef} height="220"></canvas>;
+}
+
+/* ============================================================================
+   LAYOUT
+   ============================================================================ */
+const NAV_ITEMS = [
+  { key: "dashboard", label: "Dashboard", icon: "layout-dashboard" },
+  { key: "transactions", label: "Transacciones", icon: "arrow-left-right" },
+  { key: "budgets", label: "Presupuestos", icon: "pie-chart" },
+  { key: "analytics", label: "Patrimonio", icon: "line-chart" },
+  { key: "settings", label: "Ajustes", icon: "settings" },
+];
+const PAGE_LABEL = { dashboard: "Dashboard", transactions: "Transacciones", budgets: "Presupuestos", analytics: "Patrimonio", settings: "Ajustes" };
+
+function Sidebar() {
+  const { page, setPage, goHome } = useNav();
+  const [collapsed, setCollapsed] = useState(false);
+  return (
+    <aside className={cx("hidden md:flex flex-col h-screen sticky top-0 border-r border-slate-800/70 bg-onyx-950/80 backdrop-blur-xl transition-all duration-300", collapsed ? "w-[76px]" : "w-64")}>
+      <button onClick={goHome} title="Centro de Control" className="flex items-center gap-3 px-5 h-16 border-b border-slate-800/70 hover:bg-slate-800/30 transition-colors text-left">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-champagne to-champagne-light/60 shadow-glow-champagne shrink-0">
+          <Icon name="gem" size={16} className="text-onyx-950" />
+        </div>
+        {!collapsed && (
+          <div className="flex flex-col leading-tight">
+            <span className="text-sm font-semibold font-display text-gradient-champagne tracking-wide">JP FINANCE</span>
+            <span className="text-[10px] text-slate-500 tracking-[0.2em]">SYSTEM</span>
+          </div>
+        )}
+      </button>
+      <nav className="flex-1 px-3 py-6 space-y-1">
+        {NAV_ITEMS.map((item) => {
+          const active = page === item.key;
+          return (
+            <button key={item.key} onClick={() => setPage(item.key)} className={cx("w-full group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all", active ? "bg-gradient-to-r from-champagne/15 to-transparent text-champagne border border-champagne/20" : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/40 border border-transparent")}>
+              <Icon name={item.icon} size={18} className={active ? "text-champagne" : "text-slate-500"} />
+              {!collapsed && <span>{item.label}</span>}
+            </button>
+          );
+        })}
+      </nav>
+      <button onClick={() => setCollapsed((c) => !c)} className="flex items-center gap-2 mx-3 mb-5 rounded-lg px-3 py-2 text-xs text-slate-500 hover:text-slate-200 hover:bg-slate-800/40">
+        <Icon name={collapsed ? "chevrons-right" : "chevrons-left"} size={16} />
+        {!collapsed && <span>Contraer</span>}
+      </button>
+    </aside>
+  );
+}
+function MobileBar() {
+  const { page, setPage } = useNav();
+  return (
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/70 bg-onyx-950/90 backdrop-blur-xl" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <div className="flex items-center justify-around h-16">
+        {NAV_ITEMS.map((item) => {
+          const active = page === item.key;
+          return (
+            <button key={item.key} onClick={() => setPage(item.key)} className="flex flex-col items-center justify-center gap-1 flex-1 h-full">
+              <Icon name={item.icon} size={20} className={active ? "text-champagne" : "text-slate-500"} />
+              <span className={cx("text-[10px] font-medium", active ? "text-champagne" : "text-slate-500")}>{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+function Header() {
+  const { profile, toggleHideBalances, cloudEnabled, cloudUser } = useApp();
+  const { page, goHome } = useNav();
+  const syncedLabel = cloudEnabled && cloudUser ? "Cloud" : "Local";
+  return (
+    <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-4 md:px-8 border-b border-slate-800/70 bg-onyx-950/70 backdrop-blur-xl gap-3">
+      <div className="flex items-center gap-3 min-w-0">
+        {page !== "dashboard" && (
+          <Btn variant="outline" size="sm" onClick={goHome} className="shrink-0" title="Volver al Centro de Control">
+            <Icon name="home" size={15} />
+            <span className="hidden sm:inline">Centro de Control</span>
+          </Btn>
+        )}
+        <div className="min-w-0">
+          <h1 className="text-base md:text-lg font-semibold font-display text-slate-100 truncate">{PAGE_LABEL[page]}</h1>
+          <p className="text-[11px] text-slate-500 hidden sm:block">{new Intl.DateTimeFormat("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date())}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 md:gap-3 shrink-0">
+        <div className={cx("hidden sm:flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium", syncedLabel === "Cloud" ? "border-emerald-metallic/30 bg-emerald-metallic/10 text-emerald-metallic" : "border-slate-700 bg-slate-800/50 text-slate-400")}>
+          <Icon name={syncedLabel === "Cloud" ? "cloud" : "cloud-off"} size={13} />
+          {syncedLabel}
+        </div>
+        <Btn variant={profile.hideBalances ? "primary" : "outline"} size="sm" onClick={toggleHideBalances} title={profile.hideBalances ? "Mostrar saldos" : "Ocultar saldos"}>
+          <Icon name={profile.hideBalances ? "eye-off" : "eye"} size={15} />
+          <span className="hidden lg:inline">{profile.hideBalances ? "Saldos ocultos" : "Privacidad"}</span>
+        </Btn>
+        <div className="hidden md:flex items-center gap-2 pl-3 border-l border-slate-800">
+          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-cobalt to-champagne flex items-center justify-center text-xs font-semibold text-onyx-950">{(profile.fullName || "JP").slice(0, 2).toUpperCase()}</div>
+          <span className="text-sm text-slate-300">{profile.fullName}</span>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+/* ============================================================================
+   DASHBOARD PAGE
+   ============================================================================ */
+function AmountText({ value, currency }) {
+  const { profile } = useApp();
+  const formatted = formatCurrency(value, currency);
+  return <span className="tabular-nums">{profile.hideBalances ? maskAmount(formatted) : formatted}</span>;
+}
+function KpiCards() {
+  const { transactions, accounts, profile } = useApp();
+  const kpis = useMemo(() => computeKPIs(transactions, accounts), [transactions, accounts]);
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <Card className="relative overflow-hidden">
+        <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full blur-2xl opacity-20 bg-champagne"></div>
+        <CardContent className="p-5 relative">
+          <div className="flex items-center justify-between mb-3"><span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Patrimonio Neto</span><Icon name="wallet" size={16} className="text-champagne" /></div>
+          <div className="text-2xl font-semibold font-display text-slate-100"><AmountText value={kpis.netWorth} currency={profile.currency} /></div>
+          <p className="text-[11px] text-slate-500 mt-1.5 truncate">{formatCurrency(kpis.totalAssets, profile.currency)} activos · {formatCurrency(kpis.totalLiabilities, profile.currency)} pasivos</p>
+        </CardContent>
+      </Card>
+      <Card className="relative overflow-hidden">
+        <div className={cx("absolute -right-8 -top-8 h-24 w-24 rounded-full blur-2xl opacity-20", kpis.monthlyCashFlow >= 0 ? "bg-emerald-metallic" : "bg-crimson-elegant")}></div>
+        <CardContent className="p-5 relative">
+          <div className="flex items-center justify-between mb-3"><span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Flujo de Caja Mensual</span><Icon name={kpis.monthlyCashFlow >= 0 ? "arrow-up-right" : "arrow-down-right"} size={16} className={kpis.monthlyCashFlow >= 0 ? "text-emerald-metallic" : "text-crimson-elegant"} /></div>
+          <div className="text-2xl font-semibold font-display text-slate-100"><AmountText value={kpis.monthlyCashFlow} currency={profile.currency} /></div>
+          <p className="text-[11px] text-slate-500 mt-1.5">Ingresos menos gastos del mes actual</p>
+        </CardContent>
+      </Card>
+      <Card className="relative overflow-hidden">
+        <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full blur-2xl opacity-20 bg-cobalt"></div>
+        <CardContent className="p-5 relative">
+          <div className="flex items-center justify-between mb-3"><span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Tasa de Ahorro</span><Icon name="gauge" size={16} className="text-cobalt" /></div>
+          <div className="text-2xl font-semibold font-display text-slate-100">{profile.hideBalances ? "••%" : formatPercent(kpis.savingsRate)}</div>
+          <p className="text-[11px] text-slate-500 mt-1.5">Del ingreso mensual actual</p>
+        </CardContent>
+      </Card>
+      <Card className="relative overflow-hidden">
+        <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full blur-2xl opacity-20 bg-emerald-metallic"></div>
+        <CardContent className="p-5 relative">
+          <div className="flex items-center justify-between mb-3"><span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Runway de Libertad</span><Icon name="trending-up" size={16} className="text-emerald-metallic" /></div>
+          <div className="text-2xl font-semibold font-display text-slate-100">{profile.hideBalances ? "•• meses" : kpis.freedomRunwayMonths.toFixed(1) + " meses"}</div>
+          <p className="text-[11px] text-slate-500 mt-1.5">Autonomía con activos líquidos</p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+const ACCOUNT_FILTERS = [
+  { key: "all", label: "Todas", icon: "list", match: () => true },
+  { key: "bank", label: "Bancos", icon: "landmark", match: (a) => a.type === "checking" || a.type === "savings" },
+  { key: "card", label: "Tarjetas", icon: "credit-card", match: (a) => a.type === "credit" },
+  { key: "cash", label: "Efectivo", icon: "banknote", match: (a) => a.type === "cash" },
+  { key: "investment", label: "Inversión", icon: "line-chart", match: (a) => a.type === "investment" },
+];
+const ACCOUNT_TYPE_ICON = { checking: "landmark", savings: "landmark", investment: "line-chart", credit: "credit-card", cash: "banknote", other: "landmark" };
+function BalanceViewer() {
+  const { accounts, profile, toggleHideBalances } = useApp();
+  const [filter, setFilter] = useState("all");
+  const activeFilter = ACCOUNT_FILTERS.find((f) => f.key === filter) || ACCOUNT_FILTERS[0];
+  const filteredAccounts = accounts.filter(activeFilter.match);
+  const totalFiltered = filteredAccounts.reduce((s, a) => s + (a.isAsset ? a.balance : -a.balance), 0);
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">{filter === "all" ? "Balance Total de Activos" : "Balance Filtrado — " + activeFilter.label}</p>
+            <div className="text-4xl font-semibold font-display text-gradient-champagne"><AmountText value={totalFiltered} currency={profile.currency} /></div>
+          </div>
+          <Btn variant="outline" size="icon" onClick={toggleHideBalances}><Icon name={profile.hideBalances ? "eye-off" : "eye"} size={16} /></Btn>
+        </div>
+        <div className="flex flex-wrap gap-1.5 mb-5">
+          {ACCOUNT_FILTERS.map((f) => (
+            <button key={f.key} onClick={() => setFilter(f.key)} className={cx("inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors", filter === f.key ? "border-champagne/50 bg-champagne/10 text-champagne" : "border-slate-800 text-slate-500 hover:border-slate-700 hover:text-slate-300")}>
+              <Icon name={f.icon} size={12} /> {f.label}
+            </button>
+          ))}
+        </div>
+        <div className="space-y-2">
+          {filteredAccounts.length === 0 ? (
+            <p className="text-sm text-slate-500 py-6 text-center">No hay cuentas en esta categoría.</p>
+          ) : filteredAccounts.map((acc) => (
+            <div key={acc.id} className="flex items-center justify-between rounded-lg border border-slate-800/60 bg-slate-900/40 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className={cx("flex h-8 w-8 items-center justify-center rounded-md", acc.isAsset ? "bg-cobalt/10 text-cobalt" : "bg-crimson-elegant/10 text-crimson-elegant")}><Icon name={ACCOUNT_TYPE_ICON[acc.type] || "landmark"} size={15} /></div>
+                <div><p className="text-sm font-medium text-slate-100">{acc.name}</p><p className="text-[11px] text-slate-500">{ACCOUNT_TYPE_LABEL[acc.type]}</p></div>
+              </div>
+              <span className={cx("text-sm font-medium tabular-nums", acc.isAsset ? "text-slate-100" : "text-crimson-elegant")}>
+                {profile.hideBalances ? maskAmount(formatCurrency(acc.balance, profile.currency)) : (acc.isAsset ? "" : "-") + formatCurrency(acc.balance, profile.currency)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+function ExpenseDonut() {
+  const { transactions, categories, profile } = useApp();
+  const data = useMemo(() => {
+    const cm = monthKey(new Date().toISOString());
+    const monthExp = transactions.filter((t) => t.type === "expense" && monthKey(t.date) === cm);
+    const totals = new Map();
+    monthExp.forEach((t) => totals.set(t.categoryId, (totals.get(t.categoryId) || 0) + t.amount));
+    return Array.from(totals.entries()).map(([cid, value]) => {
+      const cat = categories.find((c) => c.id === cid);
+      return { name: cat ? cat.name : "Otros", value, color: cat ? cat.color : "#94A3B8" };
+    }).sort((a, b) => b.value - a.value);
+  }, [transactions, categories]);
+  const total = data.reduce((s, d) => s + d.value, 0);
+  return (
+    <Card>
+      <CardHeader><CardTitle>Distribución de Gastos por Categoría</CardTitle></CardHeader>
+      <CardContent>
+        {data.length === 0 ? <div className="h-[240px] flex items-center justify-center text-sm text-slate-500">Sin gastos registrados este mes</div> : (
+          <div className="relative" style={{ height: 240 }}>
+            <DoughnutChart data={data} currency={profile.currency} />
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-xs text-slate-500">Total</span>
+              <span className="text-lg font-semibold font-display tabular-nums">{formatCurrency(total, profile.currency)}</span>
+            </div>
+          </div>
+        )}
+        {data.length > 0 && (
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-4">
+            {data.slice(0, 8).map((d) => (
+              <div key={d.name} className="flex items-center gap-2 text-xs">
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: d.color }}></span>
+                <span className="text-slate-400 truncate flex-1">{d.name}</span>
+                <span className="text-slate-300 tabular-nums">{total > 0 ? Math.round((d.value / total) * 100) + "%" : "0%"}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+function IncomeExpenseChart() {
+  const { transactions, profile } = useApp();
+  const [range, setRange] = useState("6");
+  const data = useMemo(() => {
+    const months = lastNMonths(Number(range));
+    return computeMonthlyTotals(transactions, months).map((m) => ({ ...m, label: new Intl.DateTimeFormat("es-AR", { month: "short" }).format(new Date(m.month + "-02")) }));
+  }, [transactions, range]);
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <CardTitle>Ingresos vs. Gastos</CardTitle>
+        <Tabs tabs={[{ value: "6", label: "6M" }, { value: "12", label: "12M" }]} value={range} onChange={setRange} />
+      </CardHeader>
+      <CardContent>
+        <div style={{ height: 260 }}><BarChartCmp labels={data.map((d) => d.label)} income={data.map((d) => d.income)} expense={data.map((d) => d.expense)} currency={profile.currency} /></div>
+        <div className="flex items-center gap-4 mt-3 justify-center">
+          <div className="flex items-center gap-1.5 text-xs text-slate-400"><span className="h-2 w-2 rounded-full bg-emerald-metallic"></span> Ingresos</div>
+          <div className="flex items-center gap-1.5 text-xs text-slate-400"><span className="h-2 w-2 rounded-full bg-crimson-elegant"></span> Gastos</div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+function RecentTransactions() {
+  const { transactions, categories, accounts, profile } = useApp();
+  const { setPage } = useNav();
+  const recent = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 6);
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <CardTitle>Movimientos Recientes</CardTitle>
+        <Btn variant="ghost" size="sm" onClick={() => setPage("transactions")}>Ver todos</Btn>
+      </CardHeader>
+      <CardContent className="space-y-1">
+        {recent.length === 0 ? <p className="text-sm text-slate-500 py-6 text-center">Aún no hay transacciones registradas.</p> : recent.map((t) => {
+          if (t.type === "transfer") {
+            const fromAcc = accounts.find((a) => a.id === t.fromAccountId);
+            const toAcc = accounts.find((a) => a.id === t.toAccountId);
+            return (
+              <div key={t.id} className="flex items-center justify-between py-2.5 border-b border-slate-800/50 last:border-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-cobalt/10 text-cobalt"><Icon name="arrow-left-right" size={15} /></div>
+                  <div className="min-w-0"><p className="text-sm text-slate-100 truncate">{(fromAcc ? fromAcc.name : "?") + " → " + (toAcc ? toAcc.name : "?")}</p><p className="text-[11px] text-slate-500">Transferencia · {formatDate(t.date)}</p></div>
+                </div>
+                <span className="text-sm font-medium tabular-nums shrink-0 pl-2 text-cobalt">{profile.hideBalances ? maskAmount() : formatCurrency(t.amount, profile.currency)}</span>
+              </div>
+            );
+          }
+          const cat = categories.find((c) => c.id === t.categoryId);
+          return (
+            <div key={t.id} className="flex items-center justify-between py-2.5 border-b border-slate-800/50 last:border-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={cx("flex h-8 w-8 shrink-0 items-center justify-center rounded-md", t.type === "income" ? "bg-emerald-metallic/10 text-emerald-metallic" : "bg-crimson-elegant/10 text-crimson-elegant")}>
+                  <Icon name={t.type === "income" ? "arrow-up-right" : "arrow-down-right"} size={15} />
+                </div>
+                <div className="min-w-0"><p className="text-sm text-slate-100 truncate">{t.description}</p><p className="text-[11px] text-slate-500">{cat ? cat.name : "Sin categoría"} · {formatDate(t.date)}</p></div>
+              </div>
+              <span className={cx("text-sm font-medium tabular-nums shrink-0 pl-2", t.type === "income" ? "text-emerald-metallic" : "text-crimson-elegant")}>
+                {profile.hideBalances ? maskAmount(formatCurrency(t.amount, profile.currency)) : (t.type === "income" ? "+" : "-") + formatCurrency(t.amount, profile.currency)}
+              </span>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+function QuickActionsPanel() {
+  const { openQuickAdd, openTransfer } = useNav();
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2"><Icon name="zap" size={15} className="text-champagne" /><CardTitle className="!text-slate-300">Acciones Rápidas</CardTitle></div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button onClick={() => openQuickAdd("income")} className="group flex items-center justify-center gap-2 rounded-xl border border-emerald-metallic/30 bg-emerald-metallic/10 hover:bg-emerald-metallic/20 py-4 text-sm font-semibold text-emerald-metallic transition-colors">
+            <Icon name="plus-circle" size={18} /> Ingreso
+          </button>
+          <button onClick={() => openQuickAdd("expense")} className="group flex items-center justify-center gap-2 rounded-xl border border-crimson-elegant/30 bg-crimson-elegant/10 hover:bg-crimson-elegant/20 py-4 text-sm font-semibold text-crimson-elegant transition-colors">
+            <Icon name="minus-circle" size={18} /> Gasto
+          </button>
+          <button onClick={openTransfer} className="group flex items-center justify-center gap-2 rounded-xl border border-cobalt/30 bg-cobalt/10 hover:bg-cobalt/20 py-4 text-sm font-semibold text-cobalt transition-colors">
+            <Icon name="arrow-left-right" size={18} /> Transferencia
+          </button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+function EmergencyRunwayWidget() {
+  const { transactions, accounts, profile } = useApp();
+  const r = useMemo(() => computeEmergencyRunway(transactions, accounts), [transactions, accounts]);
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <div className="flex items-center gap-2"><Icon name="shield" size={15} style={{ color: r.statusColor }} /><CardTitle className="!text-slate-300">Runway de Emergencia</CardTitle></div>
+        <Badge variant={r.status === "Crítico" ? "crimson" : r.status === "Ajustado" ? "champagne" : "emerald"}>{r.status}</Badge>
+      </CardHeader>
+      <CardContent>
+        <div className="text-3xl font-semibold font-display tabular-nums" style={{ color: r.statusColor }}>
+          {profile.hideBalances ? "•• meses" : r.months.toFixed(1) + " meses"}
+        </div>
+        <p className="text-[11px] text-slate-500 mt-1 mb-3">Autonomía con activos líquidos frente al gasto promedio mensual</p>
+        <Progress value={r.percentToTarget} colorClass="" style={{ backgroundColor: r.statusColor }} />
+        <div className="flex items-center justify-between mt-1.5 text-[11px] text-slate-500">
+          <span>0</span>
+          <span>Meta: {r.targetMonths} meses</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-800/70">
+          <div><p className="text-[11px] text-slate-500 uppercase tracking-wider">Activos Líquidos</p><p className="text-sm font-medium tabular-nums text-slate-100"><AmountText value={r.liquidAssets} currency={profile.currency} /></p></div>
+          <div><p className="text-[11px] text-slate-500 uppercase tracking-wider">Gasto Promedio</p><p className="text-sm font-medium tabular-nums text-slate-100"><AmountText value={r.avgMonthlyExpense} currency={profile.currency} /></p></div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+function ProjectedCashFlowWidget() {
+  const { transactions, profile } = useApp();
+  const p = useMemo(() => computeProjectedCashFlow(transactions), [transactions]);
+  const positive = p.projectedCashFlow >= 0;
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <div className="flex items-center gap-2"><Icon name="calendar-clock" size={15} className={positive ? "text-emerald-metallic" : "text-crimson-elegant"} /><CardTitle className="!text-slate-300">Flujo Proyectado a Fin de Mes</CardTitle></div>
+        <Badge variant={positive ? "emerald" : "crimson"}>{p.daysRemaining} días restantes</Badge>
+      </CardHeader>
+      <CardContent>
+        <div className={cx("text-3xl font-semibold font-display tabular-nums", positive ? "text-emerald-metallic" : "text-crimson-elegant")}>
+          <AmountText value={p.projectedCashFlow} currency={profile.currency} />
+        </div>
+        <p className="text-[11px] text-slate-500 mt-1 mb-3">Proyección lineal según el ritmo de {p.elapsedDays} de {p.totalDays} días transcurridos</p>
+        <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-800/70">
+          <div>
+            <p className="text-[11px] text-slate-500 uppercase tracking-wider">Flujo Actual</p>
+            <p className={cx("text-sm font-medium tabular-nums", p.currentCashFlow >= 0 ? "text-emerald-metallic" : "text-crimson-elegant")}><AmountText value={p.currentCashFlow} currency={profile.currency} /></p>
+          </div>
+          <div>
+            <p className="text-[11px] text-slate-500 uppercase tracking-wider">Ingresos Proy.</p>
+            <p className="text-sm font-medium tabular-nums text-slate-100"><AmountText value={p.projectedIncome} currency={profile.currency} /></p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+function DashboardPage() {
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <KpiCards />
+      <QuickActionsPanel />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <EmergencyRunwayWidget />
+        <ProjectedCashFlowWidget />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6"><IncomeExpenseChart /><RecentTransactions /></div>
+        <div className="space-y-6"><BalanceViewer /><ExpenseDonut /></div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   REGISTRO EXPRESS & TRANSFERENCIAS (cero fricción, accesibles desde
+   cualquier página vía el Centro de Control)
+   ============================================================================ */
+function mostUsedCategories(transactions, categories, type, limit = 8) {
+  const counts = new Map();
+  transactions.filter((t) => t.type === type).forEach((t) => counts.set(t.categoryId, (counts.get(t.categoryId) || 0) + 1));
+  const typeCategories = categories.filter((c) => c.type === type);
+  const sorted = [...typeCategories].sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0));
+  return sorted.slice(0, limit);
+}
+function QuickAddModal() {
+  const { quickAdd, closeQuickAdd, setPage } = useNav();
+  const { categories, accounts, transactions, addTransaction } = useApp();
+  const { toast } = useToast();
+  const open = !!quickAdd;
+  const type = quickAdd ? quickAdd.type : "expense";
+  const [categoryId, setCategoryId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [account, setAccount] = useState("");
+  const [description, setDescription] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+
+  useEffect(() => {
+    if (!open) return;
+    setCategoryId(""); setAmount(""); setDescription("");
+    setAccount((accounts[0] || {}).name || "");
+    setDate(new Date().toISOString().slice(0, 10));
+    // eslint-disable-next-line
+  }, [open, type]);
+
+  const chips = useMemo(() => mostUsedCategories(transactions, categories, type), [transactions, categories, type]);
+
+  const selectedCategory = categories.find((c) => c.id === categoryId);
+  const submit = () => {
+    const amt = parseFloat(amount);
+    if (isNaN(amt) || amt <= 0) return toast({ title: "Ingresá un monto válido", variant: "error" });
+    if (!categoryId) return toast({ title: "Elegí una categoría", variant: "error" });
+    addTransaction({ date, description: description.trim() || (selectedCategory ? selectedCategory.name : ""), amount: amt, type, categoryId, account });
+    toast({ title: type === "income" ? "Ingreso registrado" : "Gasto registrado", description: formatCurrency(amt), variant: "success" });
+    closeQuickAdd();
+  };
+  const openFullForm = () => { closeQuickAdd(); setPage("transactions"); };
+
+  return (
+    <Modal
+      open={open}
+      onClose={closeQuickAdd}
+      title={"Registro Express · " + (type === "income" ? "Ingreso" : "Gasto")}
+      description="Elegí una categoría frecuente y cargá el monto — dos toques y listo."
+      footer={<><Btn variant="ghost" onClick={closeQuickAdd}>Cancelar</Btn><Btn variant={type === "income" ? "primary" : "destructive"} onClick={submit}><Icon name="zap" size={15} /> Guardar</Btn></>}
+    >
+      <div className="space-y-4">
+        <div>
+          <Label>Categorías frecuentes</Label>
+          <div className="flex flex-wrap gap-2">
+            {chips.map((c) => (
+              <button key={c.id} onClick={() => setCategoryId(c.id)} className={cx("inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors", categoryId === c.id ? "border-transparent" : "border-slate-800 text-slate-400 hover:border-slate-700")} style={categoryId === c.id ? { backgroundColor: c.color + "26", color: c.color, borderColor: c.color + "80" } : {}}>
+                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: c.color }}></span>{c.name}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <Label>Monto</Label>
+          <Input autoFocus type="number" step="0.01" min="0" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-2xl h-14 font-display font-semibold" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Fecha</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+          <div><Label>Cuenta</Label><Select value={account} onChange={setAccount}>{accounts.map((a) => <option key={a.id} value={a.name}>{a.name}</option>)}</Select></div>
+        </div>
+        <div><Label>Descripción (opcional)</Label><Input placeholder={selectedCategory ? selectedCategory.name : "Se usa el nombre de la categoría"} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+        <button onClick={openFullForm} className="text-xs text-slate-500 hover:text-champagne underline underline-offset-2">Cargar con más detalles (recurrencia, notas)</button>
+      </div>
+    </Modal>
+  );
+}
+function TransferModal() {
+  const { transferOpen, closeTransfer } = useNav();
+  const { accounts, addTransfer, profile } = useApp();
+  const { toast } = useToast();
+  const [fromId, setFromId] = useState(""); const [toId, setToId] = useState(""); const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10)); const [description, setDescription] = useState("");
+
+  useEffect(() => {
+    if (!transferOpen) return;
+    setFromId((accounts[0] || {}).id || ""); setToId((accounts[1] || {}).id || ""); setAmount(""); setDescription("");
+    setDate(new Date().toISOString().slice(0, 10));
+    // eslint-disable-next-line
+  }, [transferOpen]);
+
+  const submit = () => {
+    const amt = parseFloat(amount);
+    if (isNaN(amt) || amt <= 0) return toast({ title: "Ingresá un monto válido", variant: "error" });
+    if (!fromId || !toId || fromId === toId) return toast({ title: "Elegí dos cuentas distintas", variant: "error" });
+    addTransfer({ date, fromAccountId: fromId, toAccountId: toId, amount: amt, description });
+    const fromAcc = accounts.find((a) => a.id === fromId); const toAcc = accounts.find((a) => a.id === toId);
+    toast({ title: "Transferencia realizada", description: (fromAcc ? fromAcc.name : "") + " → " + (toAcc ? toAcc.name : ""), variant: "success" });
+    closeTransfer();
+  };
+
+  return (
+    <Modal open={transferOpen} onClose={closeTransfer} title="Transferencia entre Cuentas" description="Movés saldo entre tus propias cuentas — no afecta ingresos ni gastos." footer={<><Btn variant="ghost" onClick={closeTransfer}>Cancelar</Btn><Btn variant="primary" onClick={submit}><Icon name="arrow-left-right" size={15} /> Transferir</Btn></>}>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-3 items-end">
+          <div><Label>Desde</Label><Select value={fromId} onChange={setFromId}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select></div>
+          <div><Label>Hacia</Label><Select value={toId} onChange={setToId}>{accounts.filter((a) => a.id !== fromId).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select></div>
+        </div>
+        <div><Label>Monto</Label><Input type="number" step="0.01" min="0" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-2xl h-14 font-display font-semibold" /></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Fecha</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+          <div><Label>Nota (opcional)</Label><Input placeholder="Transferencia interna" value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ============================================================================
+   TRANSACTIONS PAGE
+   ============================================================================ */
+function nextOccurrence(dateISO, frequency) {
+  const d = new Date(dateISO);
+  if (frequency === "weekly") d.setDate(d.getDate() + 7);
+  else if (frequency === "biweekly") d.setDate(d.getDate() + 14);
+  else if (frequency === "monthly") d.setMonth(d.getMonth() + 1);
+  else if (frequency === "yearly") d.setFullYear(d.getFullYear() + 1);
+  return d.toISOString().slice(0, 10);
+}
+function TransactionFormModal({ open, onClose, editing }) {
+  const { categories, accounts, addTransaction, updateTransaction } = useApp();
+  const { toast } = useToast();
+  const empty = { date: new Date().toISOString().slice(0, 10), description: "", amount: "", type: "expense", categoryId: "", account: "", notes: "", isRecurring: false, frequency: "monthly" };
+  const [form, setForm] = useState(empty);
+  useEffect(() => {
+    if (editing) {
+      setForm({ date: editing.date.slice(0, 10), description: editing.description, amount: String(editing.amount), type: editing.type, categoryId: editing.categoryId, account: editing.account, notes: editing.notes || "", isRecurring: !!editing.isRecurring, frequency: (editing.recurrence && editing.recurrence.frequency) || "monthly" });
+    } else if (open) {
+      setForm({ ...empty, categoryId: (categories.find((c) => c.type === "expense") || {}).id || "", account: (accounts[0] || {}).name || "" });
+    }
+    // eslint-disable-next-line
+  }, [editing, open]);
+  const filteredCategories = categories.filter((c) => c.type === form.type);
+  const submit = (e) => {
+    e.preventDefault();
+    const amount = parseFloat(form.amount);
+    if (!form.description.trim()) return toast({ title: "Falta la descripción", variant: "error" });
+    if (isNaN(amount) || amount <= 0) return toast({ title: "El monto debe ser mayor a cero", variant: "error" });
+    if (!form.categoryId) return toast({ title: "Seleccioná una categoría", variant: "error" });
+    const payload = { date: form.date, description: form.description.trim(), amount, type: form.type, categoryId: form.categoryId, account: form.account, notes: form.notes.trim() || undefined, isRecurring: form.isRecurring, recurrence: form.isRecurring ? { frequency: form.frequency, nextDate: nextOccurrence(form.date, form.frequency), active: true } : undefined };
+    if (editing) { updateTransaction(editing.id, payload); toast({ title: "Transacción actualizada", variant: "success" }); }
+    else { addTransaction(payload); toast({ title: "Transacción registrada", variant: "success" }); }
+    onClose();
+  };
+  return (
+    <Modal open={open} onClose={onClose} title={editing ? "Editar Transacción" : "Nueva Transacción"} description="Registrá el movimiento con precisión.">
+      <form onSubmit={submit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <button type="button" onClick={() => setForm((f) => ({ ...f, type: "expense", categoryId: "" }))} className={cx("rounded-lg border py-2.5 text-sm font-medium transition-colors", form.type === "expense" ? "border-crimson-elegant/50 bg-crimson-elegant/10 text-crimson-elegant" : "border-slate-800 text-slate-500 hover:border-slate-700")}>Gasto</button>
+          <button type="button" onClick={() => setForm((f) => ({ ...f, type: "income", categoryId: "" }))} className={cx("rounded-lg border py-2.5 text-sm font-medium transition-colors", form.type === "income" ? "border-emerald-metallic/50 bg-emerald-metallic/10 text-emerald-metallic" : "border-slate-800 text-slate-500 hover:border-slate-700")}>Ingreso</button>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Fecha</Label><Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} required /></div>
+          <div><Label>Monto</Label><Input type="number" step="0.01" min="0" placeholder="0.00" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} required /></div>
+        </div>
+        <div><Label>Descripción</Label><Input placeholder="Ej: Supermercado, Salario..." value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} required /></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Categoría</Label><Select value={form.categoryId} onChange={(v) => setForm((f) => ({ ...f, categoryId: v }))}><option value="">Elegir...</option>{filteredCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></div>
+          <div><Label>Cuenta</Label><Select value={form.account} onChange={(v) => setForm((f) => ({ ...f, account: v }))}><option value="">Elegir...</option>{accounts.map((a) => <option key={a.id} value={a.name}>{a.name}</option>)}</Select></div>
+        </div>
+        <div><Label>Notas (opcional)</Label><Textarea placeholder="Detalles adicionales..." value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} /></div>
+        <div className="flex items-center justify-between rounded-lg border border-slate-800 px-4 py-3">
+          <div><p className="text-sm font-medium text-slate-100">Transacción Recurrente</p><p className="text-[11px] text-slate-500">Suscripciones, alquiler, pagos fijos</p></div>
+          <Switch checked={form.isRecurring} onChange={(v) => setForm((f) => ({ ...f, isRecurring: v }))} />
+        </div>
+        {form.isRecurring && (
+          <div><Label>Frecuencia</Label><Select value={form.frequency} onChange={(v) => setForm((f) => ({ ...f, frequency: v }))}>
+            <option value="weekly">Semanal</option><option value="biweekly">Quincenal</option><option value="monthly">Mensual</option><option value="yearly">Anual</option>
+          </Select></div>
+        )}
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-2 gap-2 sm:gap-0">
+          <Btn type="button" variant="ghost" onClick={onClose}>Cancelar</Btn>
+          <Btn type="submit">{editing ? "Guardar Cambios" : "Registrar"}</Btn>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+function ImportExportMenu() {
+  const { exportJSON, importJSON, exportCSV, importCSV } = useApp();
+  const { toast } = useToast();
+  const jsonRef = useRef(null); const csvRef = useRef(null);
+  function download(content, filename, mime) { const blob = new Blob([content], { type: mime }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url); }
+  return (
+    <>
+      <DropdownMenu trigger={<Btn variant="outline"><Icon name="upload" size={16} /> Importar / Exportar</Btn>}>
+        <MenuLabel>Exportar</MenuLabel>
+        <MenuItem onClick={() => { download(exportJSON(), "jp-finance-backup-" + Date.now() + ".json", "application/json"); toast({ title: "Exportación JSON completa", variant: "success" }); }}><Icon name="file-text" size={15} className="mr-2" /> Exportar todo (JSON)</MenuItem>
+        <MenuItem onClick={() => { download(exportCSV(), "jp-finance-transacciones-" + Date.now() + ".csv", "text/csv"); toast({ title: "Exportación CSV completa", variant: "success" }); }}><Icon name="file-spreadsheet" size={15} className="mr-2" /> Exportar transacciones (CSV)</MenuItem>
+        <MenuSeparator />
+        <MenuLabel>Importar</MenuLabel>
+        <MenuItem onClick={() => jsonRef.current.click()}><Icon name="file-text" size={15} className="mr-2" /> Importar respaldo (JSON)</MenuItem>
+        <MenuItem onClick={() => csvRef.current.click()}><Icon name="file-spreadsheet" size={15} className="mr-2" /> Importar transacciones (CSV)</MenuItem>
+      </DropdownMenu>
+      <input ref={jsonRef} type="file" accept=".json,application/json" className="hidden" onChange={async (e) => { const f = e.target.files[0]; if (!f) return; const text = await f.text(); const r = importJSON(text); toast(r.success ? { title: "Datos importados correctamente", variant: "success" } : { title: "Error al importar", description: r.error, variant: "error" }); e.target.value = ""; }} />
+      <input ref={csvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={async (e) => { const f = e.target.files[0]; if (!f) return; const text = await f.text(); const r = importCSV(text); toast(r.success ? { title: "Transacciones importadas", description: r.imported + " registros agregados", variant: "success" } : { title: "Error al importar CSV", description: r.error, variant: "error" }); e.target.value = ""; }} />
+    </>
+  );
+}
+function RecurringPanel() {
+  const { transactions, categories, addTransaction, updateTransaction, profile } = useApp();
+  const { toast } = useToast();
+  const recurring = transactions.filter((t) => t.isRecurring && t.recurrence && t.recurrence.active);
+  if (recurring.length === 0) return null;
+  const processNow = (id) => {
+    const tx = transactions.find((t) => t.id === id);
+    if (!tx || !tx.recurrence) return;
+    addTransaction({ date: tx.recurrence.nextDate, description: tx.description, amount: tx.amount, type: tx.type, categoryId: tx.categoryId, account: tx.account, notes: tx.notes });
+    updateTransaction(id, { recurrence: { ...tx.recurrence, nextDate: nextOccurrence(tx.recurrence.nextDate, tx.recurrence.frequency) } });
+    toast({ title: "Movimiento recurrente procesado", description: tx.description, variant: "success" });
+  };
+  return (
+    <Card>
+      <CardHeader><CardTitle>Transacciones Recurrentes</CardTitle><CardDescription>Suscripciones y pagos fijos programados</CardDescription></CardHeader>
+      <CardContent className="space-y-2">
+        {recurring.map((t) => {
+          const cat = categories.find((c) => c.id === t.categoryId);
+          const isDue = t.recurrence && new Date(t.recurrence.nextDate) <= new Date();
+          return (
+            <div key={t.id} className="flex items-center justify-between rounded-lg border border-slate-800/60 bg-slate-900/40 px-4 py-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-champagne/10 text-champagne"><Icon name="repeat" size={15} /></div>
+                <div className="min-w-0"><p className="text-sm text-slate-100 truncate">{t.description}</p><p className="text-[11px] text-slate-500">{cat ? cat.name : ""} · {FREQ_LABEL[t.recurrence.frequency]} · Próximo: {formatDate(t.recurrence.nextDate)}</p></div>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className={cx("text-sm font-medium tabular-nums", t.type === "income" ? "text-emerald-metallic" : "text-crimson-elegant")}>{formatCurrency(t.amount, profile.currency)}</span>
+                {isDue && <Btn variant="outline" size="sm" onClick={() => processNow(t.id)}><Icon name="play" size={14} /> Procesar</Btn>}
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+function TransactionsTable({ onEdit }) {
+  const { transactions, categories, accounts, deleteTransaction, duplicateTransaction, profile } = useApp();
+  const { toast } = useToast();
+  const [search, setSearch] = useState(""); const [typeF, setTypeF] = useState("all"); const [catF, setCatF] = useState("all"); const [accF, setAccF] = useState("all");
+  const [sortField, setSortField] = useState("date"); const [sortDir, setSortDir] = useState("desc");
+  const accountsList = useMemo(() => Array.from(new Set(transactions.map((t) => t.account))).filter(Boolean), [transactions]);
+  const filtered = useMemo(() => {
+    let list = [...transactions];
+    if (search.trim()) { const q = search.toLowerCase(); list = list.filter((t) => (t.description || "").toLowerCase().includes(q) || (t.notes || "").toLowerCase().includes(q)); }
+    if (typeF !== "all") list = list.filter((t) => t.type === typeF);
+    if (catF !== "all") list = list.filter((t) => t.categoryId === catF);
+    if (accF !== "all") list = list.filter((t) => t.account === accF);
+    list.sort((a, b) => {
+      let c = 0;
+      if (sortField === "date") c = new Date(a.date) - new Date(b.date);
+      if (sortField === "amount") c = a.amount - b.amount;
+      if (sortField === "description") c = (a.description || "").localeCompare(b.description || "");
+      return sortDir === "asc" ? c : -c;
+    });
+    return list;
+  }, [transactions, search, typeF, catF, accF, sortField, sortDir]);
+  const toggleSort = (field) => { if (sortField === field) setSortDir((d) => d === "asc" ? "desc" : "asc"); else { setSortField(field); setSortDir("desc"); } };
+  const handleDuplicate = (t) => { duplicateTransaction(t.id); toast({ title: "Transacción duplicada", description: t.description + " · hoy", variant: "success" }); };
+  const handleDelete = (t) => { deleteTransaction(t.id); toast({ title: "Transacción eliminada", description: t.description, variant: "info" }); };
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex flex-col lg:flex-row gap-3 mb-5">
+          <div className="relative flex-1">
+            <Icon name="search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Input placeholder="Buscar por descripción o notas..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          </div>
+          <Select value={typeF} onChange={setTypeF} className="lg:w-40"><option value="all">Todos los tipos</option><option value="income">Ingresos</option><option value="expense">Gastos</option><option value="transfer">Transferencias</option></Select>
+          <Select value={catF} onChange={setCatF} className="lg:w-48"><option value="all">Todas las categorías</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
+          <Select value={accF} onChange={setAccF} className="lg:w-44"><option value="all">Todas las cuentas</option>{accountsList.map((a) => <option key={a} value={a}>{a}</option>)}</Select>
+        </div>
+        <div className="overflow-x-auto scrollbar-thin -mx-5">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-slate-800 text-left">
+              <th className="px-5 py-2.5"><button onClick={() => toggleSort("date")} className="flex items-center gap-1 text-xs font-medium text-slate-500 uppercase tracking-wider hover:text-slate-300">Fecha <Icon name="arrow-up-down" size={12} /></button></th>
+              <th className="px-3 py-2.5"><button onClick={() => toggleSort("description")} className="flex items-center gap-1 text-xs font-medium text-slate-500 uppercase tracking-wider hover:text-slate-300">Descripción <Icon name="arrow-up-down" size={12} /></button></th>
+              <th className="px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Categoría</th>
+              <th className="px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider hidden md:table-cell">Cuenta</th>
+              <th className="px-3 py-2.5 text-right"><button onClick={() => toggleSort("amount")} className="flex items-center gap-1 ml-auto text-xs font-medium text-slate-500 uppercase tracking-wider hover:text-slate-300">Monto <Icon name="arrow-up-down" size={12} /></button></th>
+              <th className="px-5 py-2.5 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Acciones</th>
+            </tr></thead>
+            <tbody>
+              {filtered.length === 0 ? <tr><td colSpan={6} className="text-center py-10 text-slate-500 text-sm">No se encontraron transacciones con estos filtros.</td></tr> : filtered.map((t) => {
+                if (t.type === "transfer") {
+                  const fromAcc = accounts.find((a) => a.id === t.fromAccountId);
+                  const toAcc = accounts.find((a) => a.id === t.toAccountId);
+                  return (
+                    <tr key={t.id} className="border-b border-slate-800/50 last:border-0 hover:bg-slate-900/40 transition-colors group">
+                      <td className="px-5 py-3 text-slate-400 whitespace-nowrap tabular-nums">{formatDate(t.date)}</td>
+                      <td className="px-3 py-3 min-w-[160px]">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-cobalt/10 text-cobalt"><Icon name="arrow-left-right" size={13} /></div>
+                          <span className="text-slate-100">{t.description}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3"><span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs border-cobalt/30 bg-cobalt/10 text-cobalt">Transferencia</span></td>
+                      <td className="px-3 py-3 text-slate-400 hidden md:table-cell">{(fromAcc ? fromAcc.name : "?") + " → " + (toAcc ? toAcc.name : "?")}</td>
+                      <td className="px-3 py-3 text-right font-medium tabular-nums text-cobalt">{profile.hideBalances ? maskAmount() : formatCurrency(t.amount, profile.currency)}</td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <Btn variant="ghost" size="icon-sm" onClick={() => handleDuplicate(t)} title="Duplicar"><Icon name="copy" size={14} /></Btn>
+                          <Btn variant="ghost" size="icon-sm" onClick={() => handleDelete(t)} title="Eliminar"><Icon name="trash-2" size={14} className="text-crimson-elegant" /></Btn>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+                const cat = categories.find((c) => c.id === t.categoryId);
+                return (
+                  <tr key={t.id} className="border-b border-slate-800/50 last:border-0 hover:bg-slate-900/40 transition-colors group">
+                    <td className="px-5 py-3 text-slate-400 whitespace-nowrap tabular-nums">{formatDate(t.date)}</td>
+                    <td className="px-3 py-3 min-w-[160px]">
+                      <div className="flex items-center gap-2">
+                        <div className={cx("flex h-6 w-6 shrink-0 items-center justify-center rounded", t.type === "income" ? "bg-emerald-metallic/10 text-emerald-metallic" : "bg-crimson-elegant/10 text-crimson-elegant")}><Icon name={t.type === "income" ? "arrow-up-right" : "arrow-down-right"} size={13} /></div>
+                        <span className="text-slate-100">{t.description}</span>
+                        {t.isRecurring && <Icon name="repeat" size={13} className="text-champagne shrink-0" />}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3"><span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs" style={{ backgroundColor: (cat ? cat.color : "#94A3B8") + "1A", color: cat ? cat.color : "#94A3B8" }}>{cat ? cat.name : "Sin categoría"}</span></td>
+                    <td className="px-3 py-3 text-slate-400 hidden md:table-cell">{t.account}</td>
+                    <td className={cx("px-3 py-3 text-right font-medium tabular-nums", t.type === "income" ? "text-emerald-metallic" : "text-crimson-elegant")}>
+                      {profile.hideBalances ? maskAmount(formatCurrency(t.amount, profile.currency)) : (t.type === "income" ? "+" : "-") + formatCurrency(t.amount, profile.currency)}
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        <Btn variant="ghost" size="icon-sm" onClick={() => onEdit(t)} title="Editar"><Icon name="pencil" size={14} /></Btn>
+                        <Btn variant="ghost" size="icon-sm" onClick={() => handleDuplicate(t)} title="Duplicar"><Icon name="copy" size={14} /></Btn>
+                        <Btn variant="ghost" size="icon-sm" onClick={() => handleDelete(t)} title="Eliminar"><Icon name="trash-2" size={14} className="text-crimson-elegant" /></Btn>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[11px] text-slate-500 mt-4">Mostrando {filtered.length} de {transactions.length} transacciones</p>
+      </CardContent>
+    </Card>
+  );
+}
+function TransactionsPage() {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div><h2 className="text-xl font-semibold font-display text-slate-100">Gestión de Transacciones</h2><p className="text-sm text-slate-500">Registrá, editá y analizá cada movimiento de tu patrimonio.</p></div>
+        <div className="flex items-center gap-2"><ImportExportMenu /><Btn onClick={() => { setEditing(null); setModalOpen(true); }}><Icon name="plus" size={16} /> Nueva Transacción</Btn></div>
+      </div>
+      <RecurringPanel />
+      <TransactionsTable onEdit={(t) => { setEditing(t); setModalOpen(true); }} />
+      <TransactionFormModal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} editing={editing} />
+    </div>
+  );
+}
+
+/* ============================================================================
+   BUDGETS PAGE
+   ============================================================================ */
+const GROUP_META = {
+  needs: { label: "Necesidades", description: "Vivienda, servicios, alimentación, salud, transporte", color: "#F43F5E", target: RULE_502030.needs },
+  wants: { label: "Deseos", description: "Gastronomía, entretenimiento, compras, viajes", color: "#D4AF7A", target: RULE_502030.wants },
+  savings: { label: "Ahorro / Inversión", description: "Ahorro, inversión y aportes a metas", color: "#3B82F6", target: RULE_502030.savings },
+};
+function Rule502030Card() {
+  const { transactions, categories, profile } = useApp();
+  const { groupTotals, income } = useMemo(() => {
+    const cm = monthKey(new Date().toISOString());
+    const monthExp = transactions.filter((t) => t.type === "expense" && monthKey(t.date) === cm);
+    const monthInc = transactions.filter((t) => t.type === "income" && monthKey(t.date) === cm).reduce((s, t) => s + t.amount, 0);
+    const totals = { needs: 0, wants: 0, savings: 0 };
+    monthExp.forEach((t) => { const cat = categories.find((c) => c.id === t.categoryId); if (cat) totals[cat.budgetGroup] += t.amount; });
+    return { groupTotals: totals, income: monthInc };
+  }, [transactions, categories]);
+  const totalSpent = groupTotals.needs + groupTotals.wants + groupTotals.savings;
+  return (
+    <Card>
+      <CardHeader><CardTitle>Regla 50/30/20</CardTitle><CardDescription>50% Necesidades · 30% Deseos · 20% Ahorro e Inversión</CardDescription></CardHeader>
+      <CardContent className="space-y-5">
+        {Object.keys(GROUP_META).map((group) => {
+          const meta = GROUP_META[group]; const spent = groupTotals[group];
+          const actualPercent = income > 0 ? (spent / income) * 100 : totalSpent > 0 ? (spent / totalSpent) * 100 : 0;
+          const over = actualPercent > meta.target;
+          return (
+            <div key={group}>
+              <div className="flex items-center justify-between mb-1.5">
+                <div><p className="text-sm font-medium text-slate-100">{meta.label}</p><p className="text-[11px] text-slate-500">{meta.description}</p></div>
+                <div className="text-right"><p className={cx("text-sm font-semibold tabular-nums", over ? "text-crimson-elegant" : "text-slate-100")}>{formatPercent(actualPercent)}<span className="text-slate-500 font-normal"> / {meta.target}%</span></p><p className="text-[11px] text-slate-500 tabular-nums">{formatCurrency(spent, profile.currency)}</p></div>
+              </div>
+              <Progress value={Math.min(actualPercent, 100)} colorClass="" style={{ backgroundColor: over ? "#F43F5E" : "#D4AF7A" }} />
+            </div>
+          );
+        })}
+        {income === 0 && <p className="text-[11px] text-slate-500 pt-1">Registrá ingresos del mes para calcular los porcentajes sobre tu ingreso real.</p>}
+      </CardContent>
+    </Card>
+  );
+}
+function BudgetLimits() {
+  const { transactions, categories, budgets, upsertBudget, deleteBudget, profile } = useApp();
+  const [open, setOpen] = useState(false); const [categoryId, setCategoryId] = useState(""); const [limit, setLimit] = useState("");
+  const cm = monthKey(new Date().toISOString());
+  const expenseCats = categories.filter((c) => c.type === "expense");
+  const monthBudgets = budgets.filter((b) => b.month === cm);
+  const rows = useMemo(() => monthBudgets.map((b) => {
+    const cat = categories.find((c) => c.id === b.categoryId);
+    const spent = transactions.filter((t) => t.type === "expense" && t.categoryId === b.categoryId && monthKey(t.date) === cm).reduce((s, t) => s + t.amount, 0);
+    const percent = b.monthlyLimit > 0 ? (spent / b.monthlyLimit) * 100 : 0;
+    return { budget: b, category: cat, spent, percent };
+  }).sort((a, b) => b.percent - a.percent), [monthBudgets, categories, transactions]);
+  const save = () => { if (!categoryId || !limit) return; upsertBudget({ categoryId, monthlyLimit: parseFloat(limit), month: cm }); setOpen(false); setCategoryId(""); setLimit(""); };
+  const statusFor = (p) => p >= 100 ? { color: "text-crimson-elegant", bar: "#F43F5E", icon: "alert-triangle", label: "Excedido" } : p >= 80 ? { color: "text-champagne", bar: "#D4AF7A", icon: "alert-triangle", label: "Atención" } : { color: "text-emerald-metallic", bar: "#10B981", icon: "check-circle-2", label: "En control" };
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <div><CardTitle>Límites de Presupuesto</CardTitle><CardDescription>Indicadores semafóricos por categoría — mes actual</CardDescription></div>
+        <Btn size="sm" variant="outline" onClick={() => setOpen(true)}><Icon name="plus" size={14} /> Nuevo Límite</Btn>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {rows.length === 0 ? <p className="text-sm text-slate-500 py-6 text-center">No configuraste límites de presupuesto todavía.</p> : rows.map(({ budget, category, spent, percent }) => {
+          const status = statusFor(percent);
+          return (
+            <div key={budget.id} className="group">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2"><Icon name={status.icon} size={14} className={status.color} /><span className="text-sm text-slate-100">{category ? category.name : "Categoría"}</span></div>
+                <div className="flex items-center gap-3">
+                  <span className={cx("text-xs font-medium tabular-nums", status.color)}>{formatCurrency(spent, profile.currency)} / {formatCurrency(budget.monthlyLimit, profile.currency)}</span>
+                  <button onClick={() => deleteBudget(budget.id)} className="opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash-2" size={14} className="text-slate-500 hover:text-crimson-elegant" /></button>
+                </div>
+              </div>
+              <Progress value={Math.min(percent, 100)} colorClass="" style={{ backgroundColor: status.bar }} />
+              <p className={cx("text-[11px] mt-1 tabular-nums", status.color)}>{formatPercent(percent)} utilizado · {status.label}</p>
+            </div>
+          );
+        })}
+      </CardContent>
+      <Modal open={open} onClose={() => setOpen(false)} title="Nuevo Límite de Presupuesto" footer={<><Btn variant="ghost" onClick={() => setOpen(false)}>Cancelar</Btn><Btn onClick={save}><Icon name="settings-2" size={15} /> Guardar Límite</Btn></>}>
+        <div className="space-y-4">
+          <div><Label>Categoría</Label><Select value={categoryId} onChange={setCategoryId}><option value="">Elegir categoría</option>{expenseCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></div>
+          <div><Label>Límite Mensual</Label><Input type="number" min="0" step="0.01" placeholder="0.00" value={limit} onChange={(e) => setLimit(e.target.value)} /></div>
+        </div>
+      </Modal>
+    </Card>
+  );
+}
+function BudgetsPage() {
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div><h2 className="text-xl font-semibold font-display text-slate-100">Presupuestos y Reglas Inteligentes</h2><p className="text-sm text-slate-500">Controlá tu gasto con precisión quirúrgica.</p></div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6"><Rule502030Card /><BudgetLimits /></div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   ANALYTICS PAGE (Interés Compuesto / Deudas / Metas)
+   ============================================================================ */
+function CompoundInterestCalculator() {
+  const { profile } = useApp();
+  const [initial, setInitial] = useState("10000"); const [monthly, setMonthly] = useState("500"); const [rate, setRate] = useState("8");
+  const series = useMemo(() => computeCompoundInterest({ initial: parseFloat(initial) || 0, monthlyContribution: parseFloat(monthly) || 0, annualRatePercent: parseFloat(rate) || 0, years: 20 }), [initial, monthly, rate]);
+  const milestones = [5, 10, 20].map((y) => series.find((p) => p.year === y));
+  return (
+    <Card>
+      <CardHeader><CardTitle>Calculadora de Interés Compuesto</CardTitle><CardDescription>Proyección de riqueza a 5, 10 y 20 años</CardDescription></CardHeader>
+      <CardContent className="space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div><Label>Capital Inicial</Label><Input type="number" min="0" value={initial} onChange={(e) => setInitial(e.target.value)} /></div>
+          <div><Label>Aporte Mensual</Label><Input type="number" min="0" value={monthly} onChange={(e) => setMonthly(e.target.value)} /></div>
+          <div><Label>Tasa Anual (%)</Label><Input type="number" min="0" step="0.1" value={rate} onChange={(e) => setRate(e.target.value)} /></div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {milestones.map((m) => m && (
+            <div key={m.year} className="rounded-lg border border-slate-800/70 bg-slate-900/40 p-3 text-center">
+              <p className="text-[11px] text-slate-500 uppercase tracking-wider">{m.year} años</p>
+              <p className="text-lg font-semibold font-display tabular-nums text-gradient-champagne">{formatCompact(m.total, profile.currency)}</p>
+              <p className="text-[11px] text-emerald-metallic tabular-nums">+{formatCompact(m.interest, profile.currency)} interés</p>
+            </div>
+          ))}
+        </div>
+        <div style={{ height: 220 }}><AreaChartCmp labels={series.map((p) => p.year)} series={series.map((p) => p.total)} color="#D4AF7A" currency={profile.currency} xSuffix="a" /></div>
+      </CardContent>
+    </Card>
+  );
+}
+function DebtManager() {
+  const { debts, addDebt, deleteDebt, profile } = useApp();
+  const [strategy, setStrategy] = useState("avalanche"); const [extra, setExtra] = useState("200");
+  const [open, setOpen] = useState(false); const [form, setForm] = useState({ name: "", balance: "", rate: "", minimum: "" });
+  const simulation = useMemo(() => debts.length === 0 ? null : simulateDebtPayoff(debts, parseFloat(extra) || 0, strategy), [debts, extra, strategy]);
+  const chartData = useMemo(() => { if (!simulation) return []; const step = Math.max(1, Math.floor(simulation.months.length / 40)); return simulation.months.filter((_, i) => i % step === 0); }, [simulation]);
+  const totalDebt = debts.reduce((s, d) => s + d.balance, 0);
+  const addNew = () => { if (!form.name || !form.balance) return; addDebt({ name: form.name, balance: parseFloat(form.balance), originalBalance: parseFloat(form.balance), interestRate: parseFloat(form.rate) || 0, minimumPayment: parseFloat(form.minimum) || 0 }); setForm({ name: "", balance: "", rate: "", minimum: "" }); setOpen(false); };
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <div><CardTitle>Gestión de Deudas</CardTitle><CardDescription>Estrategia Avalancha vs. Bola de Nieve</CardDescription></div>
+        <Btn size="sm" variant="outline" onClick={() => setOpen(true)}><Icon name="plus" size={14} /> Agregar Deuda</Btn>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {debts.length === 0 ? <p className="text-sm text-slate-500 py-6 text-center">No registraste deudas. Agregá una para simular tu estrategia de pago.</p> : (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setStrategy("avalanche")} className={cx("flex items-center justify-center gap-2 rounded-lg border py-3 px-4 text-sm font-medium transition-colors", strategy === "avalanche" ? "border-cobalt/50 bg-cobalt/10 text-cobalt" : "border-slate-800 text-slate-500 hover:border-slate-700")}><Icon name="mountain" size={16} /> Avalancha</button>
+              <button onClick={() => setStrategy("snowball")} className={cx("flex items-center justify-center gap-2 rounded-lg border py-3 px-4 text-sm font-medium transition-colors", strategy === "snowball" ? "border-champagne/50 bg-champagne/10 text-champagne" : "border-slate-800 text-slate-500 hover:border-slate-700")}><Icon name="snowflake" size={16} /> Bola de Nieve</button>
+            </div>
+            <p className="text-[11px] text-slate-500 -mt-2">{strategy === "avalanche" ? "Prioriza las deudas con mayor tasa de interés — minimiza el interés total pagado." : "Prioriza las deudas con menor saldo — genera impulso psicológico con victorias rápidas."}</p>
+            <div><Label>Pago Extra Mensual</Label><Input type="number" min="0" value={extra} onChange={(e) => setExtra(e.target.value)} /></div>
+            <div className="space-y-2">
+              {debts.map((d) => (
+                <div key={d.id} className="flex items-center justify-between rounded-lg border border-slate-800/60 bg-slate-900/40 px-4 py-3">
+                  <div><p className="text-sm text-slate-100">{d.name}</p><p className="text-[11px] text-slate-500">{d.interestRate}% TNA · Pago mín. {formatCurrency(d.minimumPayment, profile.currency)}</p></div>
+                  <div className="flex items-center gap-3"><span className="text-sm font-medium text-crimson-elegant tabular-nums">{formatCurrency(d.balance, profile.currency)}</span><button onClick={() => deleteDebt(d.id)}><Icon name="trash-2" size={14} className="text-slate-500 hover:text-crimson-elegant" /></button></div>
+                </div>
+              ))}
+              <div className="flex items-center justify-between px-4 pt-1"><span className="text-xs text-slate-500">Deuda Total</span><span className="text-sm font-semibold text-slate-100 tabular-nums">{formatCurrency(totalDebt, profile.currency)}</span></div>
+            </div>
+            {simulation && simulation.months.length > 0 && (
+              <>
+                <div style={{ height: 180 }}><AreaChartCmp labels={chartData.map((m) => m.month)} series={chartData.map((m) => m.totalRemaining)} color="#F43F5E" currency={profile.currency} xSuffix="m" /></div>
+                <div className="rounded-lg border border-slate-800/70 bg-slate-900/40 p-4">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Orden de Cancelación Proyectado</p>
+                  <div className="flex flex-wrap gap-2">{simulation.payoffOrder.map((p, i) => <Badge key={p.id} variant="champagne">{i + 1}. {p.name} · mes {p.monthPaidOff}</Badge>)}</div>
+                  <p className="text-[11px] text-slate-500 mt-3">Libre de deudas en {simulation.months.length} meses con este plan.</p>
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </CardContent>
+      <Modal open={open} onClose={() => setOpen(false)} title="Nueva Deuda" footer={<><Btn variant="ghost" onClick={() => setOpen(false)}>Cancelar</Btn><Btn onClick={addNew}>Agregar</Btn></>}>
+        <div className="space-y-4">
+          <div><Label>Nombre</Label><Input placeholder="Ej: Tarjeta de Crédito" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Saldo Actual</Label><Input type="number" min="0" value={form.balance} onChange={(e) => setForm((f) => ({ ...f, balance: e.target.value }))} /></div>
+            <div><Label>Tasa Anual (%)</Label><Input type="number" min="0" step="0.1" value={form.rate} onChange={(e) => setForm((f) => ({ ...f, rate: e.target.value }))} /></div>
+          </div>
+          <div><Label>Pago Mínimo Mensual</Label><Input type="number" min="0" value={form.minimum} onChange={(e) => setForm((f) => ({ ...f, minimum: e.target.value }))} /></div>
+        </div>
+      </Modal>
+    </Card>
+  );
+}
+const GOAL_COLORS = ["#D4AF7A", "#10B981", "#3B82F6", "#F43F5E"];
+function GoalsTracker() {
+  const { goals, addGoal, updateGoal, deleteGoal, profile } = useApp();
+  const [open, setOpen] = useState(false); const [contributeId, setContributeId] = useState(null); const [contributeAmount, setContributeAmount] = useState("");
+  const [form, setForm] = useState({ name: "", type: "savings", targetAmount: "", currentAmount: "", targetDate: "" });
+  const addNew = () => { if (!form.name || !form.targetAmount) return; addGoal({ name: form.name, type: form.type, targetAmount: parseFloat(form.targetAmount), currentAmount: parseFloat(form.currentAmount) || 0, targetDate: form.targetDate || undefined, color: GOAL_COLORS[goals.length % GOAL_COLORS.length] }); setForm({ name: "", type: "savings", targetAmount: "", currentAmount: "", targetDate: "" }); setOpen(false); };
+  const contribute = () => { if (!contributeId) return; const g = goals.find((x) => x.id === contributeId); if (!g) return; updateGoal(contributeId, { currentAmount: g.currentAmount + (parseFloat(contributeAmount) || 0) }); setContributeId(null); setContributeAmount(""); };
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <div><CardTitle>Metas de Ahorro e Inversión</CardTitle><CardDescription>Seguimiento de avance hacia tus objetivos</CardDescription></div>
+        <Btn size="sm" variant="outline" onClick={() => setOpen(true)}><Icon name="plus" size={14} /> Nueva Meta</Btn>
+      </CardHeader>
+      <CardContent>
+        {goals.length === 0 ? <p className="text-sm text-slate-500 py-6 text-center">Aún no definiste metas. Creá la primera.</p> : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {goals.map((g) => {
+              const percent = g.targetAmount > 0 ? (g.currentAmount / g.targetAmount) * 100 : 0;
+              return (
+                <div key={g.id} className="rounded-lg border border-slate-800/70 bg-slate-900/40 p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: g.color + "1A", color: g.color }}><Icon name="target" size={16} /></div>
+                      <div><p className="text-sm font-medium text-slate-100">{g.name}</p><p className="text-[11px] text-slate-500">{GOAL_TYPE_LABEL[g.type]}</p></div>
+                    </div>
+                    <button onClick={() => deleteGoal(g.id)}><Icon name="trash-2" size={14} className="text-slate-500 hover:text-crimson-elegant" /></button>
+                  </div>
+                  <Progress value={Math.min(percent, 100)} colorClass="" style={{ backgroundColor: g.color }} />
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-xs text-slate-400 tabular-nums">{formatCurrency(g.currentAmount, profile.currency)} / {formatCurrency(g.targetAmount, profile.currency)}</span>
+                    <span className="text-xs font-medium tabular-nums" style={{ color: g.color }}>{formatPercent(percent, 0)}</span>
+                  </div>
+                  <Btn size="sm" variant="secondary" className="w-full mt-3" onClick={() => setContributeId(g.id)}><Icon name="trending-up" size={14} /> Aportar</Btn>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+      <Modal open={open} onClose={() => setOpen(false)} title="Nueva Meta" footer={<><Btn variant="ghost" onClick={() => setOpen(false)}>Cancelar</Btn><Btn onClick={addNew}>Crear Meta</Btn></>}>
+        <div className="space-y-4">
+          <div><Label>Nombre</Label><Input placeholder="Ej: Fondo de Emergencia" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
+          <div><Label>Tipo</Label><Select value={form.type} onChange={(v) => setForm((f) => ({ ...f, type: v }))}>{Object.entries(GOAL_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Monto Objetivo</Label><Input type="number" min="0" value={form.targetAmount} onChange={(e) => setForm((f) => ({ ...f, targetAmount: e.target.value }))} /></div>
+            <div><Label>Monto Actual</Label><Input type="number" min="0" value={form.currentAmount} onChange={(e) => setForm((f) => ({ ...f, currentAmount: e.target.value }))} /></div>
+          </div>
+          <div><Label>Fecha Objetivo (opcional)</Label><Input type="date" value={form.targetDate} onChange={(e) => setForm((f) => ({ ...f, targetDate: e.target.value }))} /></div>
+        </div>
+      </Modal>
+      <Modal open={!!contributeId} onClose={() => setContributeId(null)} title="Aportar a la Meta" footer={<><Btn variant="ghost" onClick={() => setContributeId(null)}>Cancelar</Btn><Btn onClick={contribute}>Confirmar Aporte</Btn></>}>
+        <div><Label>Monto a Aportar</Label><Input type="number" min="0" value={contributeAmount} onChange={(e) => setContributeAmount(e.target.value)} /></div>
+      </Modal>
+    </Card>
+  );
+}
+function AnalyticsPage() {
+  const [tab, setTab] = useState("wealth");
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div><h2 className="text-xl font-semibold font-display text-slate-100">Analítica Proyectiva &amp; Patrimonio</h2><p className="text-sm text-slate-500">Proyectá tu riqueza futura y diseñá tu estrategia de libertad financiera.</p></div>
+      <Tabs tabs={[{ value: "wealth", label: "Interés Compuesto" }, { value: "debt", label: "Deudas" }, { value: "goals", label: "Metas" }]} value={tab} onChange={setTab} />
+      <div className="mt-4">{tab === "wealth" && <CompoundInterestCalculator />}{tab === "debt" && <DebtManager />}{tab === "goals" && <GoalsTracker />}</div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   SETTINGS PAGE
+   ============================================================================ */
+const SQL_SCHEMA = "-- Ver schema.sql completo entregado junto al proyecto Next.js.\\n-- Resumen de tablas: profiles, categories, transactions, budgets, goals.\\n-- Incluye Row Level Security por usuario y triggers de updated_at.";
+function ProfileCard() {
+  const { profile, updateProfile } = useApp();
+  const CURRENCIES = ["USD", "EUR", "ARS", "GBP", "CHF"];
+  return (
+    <Card>
+      <CardHeader><CardTitle>Perfil</CardTitle><CardDescription>Preferencias personales y de privacidad</CardDescription></CardHeader>
+      <CardContent className="space-y-4">
+        <div><Label>Nombre</Label><Input value={profile.fullName} onChange={(e) => updateProfile({ fullName: e.target.value })} /></div>
+        <div><Label>Moneda</Label><Select value={profile.currency} onChange={(v) => updateProfile({ currency: v })}>{CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}</Select></div>
+        <div className="flex items-center justify-between rounded-lg border border-slate-800 px-4 py-3">
+          <div><p className="text-sm font-medium text-slate-100">Ocultar Saldos por Defecto</p><p className="text-[11px] text-slate-500">Modo privacidad al abrir la app</p></div>
+          <Switch checked={profile.hideBalances} onChange={(v) => updateProfile({ hideBalances: v })} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+function CloudSyncCard() {
+  const { supabaseConfig, setSupabaseConfig, cloudEnabled, cloudUser, signInWithEmail, signOut } = useApp();
+  const { toast } = useToast();
+  const [urlField, setUrlField] = useState(supabaseConfig.url); const [keyField, setKeyField] = useState(supabaseConfig.anonKey);
+  const [email, setEmail] = useState(""); const [sending, setSending] = useState(false);
+  const saveConfig = () => { setSupabaseConfig({ url: urlField.trim(), anonKey: keyField.trim() }); toast({ title: "Configuración de Supabase guardada", variant: "success" }); };
+  const doSignIn = async () => {
+    if (!email.trim()) return;
+    setSending(true);
+    const { error } = await signInWithEmail(email.trim());
+    setSending(false);
+    toast(error ? { title: "No se pudo enviar el enlace", description: error, variant: "error" } : { title: "Revisá tu email", description: "Te enviamos un enlace mágico para iniciar sesión.", variant: "success" });
+  };
+  return (
+    <Card>
+      <CardHeader><CardTitle>Sincronización en la Nube</CardTitle><CardDescription>Multi-dispositivo con Supabase — con fallback automático a LocalStorage</CardDescription></CardHeader>
+      <CardContent className="space-y-4">
+        {!cloudEnabled ? (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-400">Pegá la URL y la clave anónima (anon key) de tu proyecto de Supabase (Project Settings → API) para activar la sincronización cloud. Ejecutá antes el <code className="text-champagne">schema.sql</code> provisto. Sin esto, la app funciona 100% offline con LocalStorage.</p>
+            <div><Label>Project URL</Label><Input placeholder="https://tu-proyecto.supabase.co" value={urlField} onChange={(e) => setUrlField(e.target.value)} /></div>
+            <div><Label>Anon Public Key</Label><Input placeholder="eyJhbGciOi..." value={keyField} onChange={(e) => setKeyField(e.target.value)} /></div>
+            <Btn onClick={saveConfig}><Icon name="database" size={15} /> Guardar Configuración</Btn>
+          </div>
+        ) : cloudUser ? (
+          <div className="flex items-center justify-between rounded-lg border border-emerald-metallic/30 bg-emerald-metallic/10 p-4">
+            <div className="flex items-center gap-3"><Icon name="cloud" size={16} className="text-emerald-metallic" /><div><p className="text-sm text-slate-100">{cloudUser.email}</p><Badge variant="emerald" className="mt-1">Sincronizado</Badge></div></div>
+            <Btn variant="ghost" size="sm" onClick={signOut}><Icon name="log-out" size={14} /> Salir</Btn>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-400">Iniciá sesión con tu email para sincronizar tus datos entre PC, tablet y móvil.</p>
+            <div className="flex gap-2"><Input type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} /><Btn onClick={doSignIn} disabled={sending}><Icon name="mail" size={15} /> {sending ? "Enviando..." : "Enviar Enlace"}</Btn></div>
+            <Btn variant="ghost" size="sm" onClick={() => setSupabaseConfig({ url: "", anonKey: "" })}>Cambiar credenciales</Btn>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+function AccountsCard() {
+  const { accounts, addAccount, deleteAccount, profile } = useApp();
+  const [open, setOpen] = useState(false); const [form, setForm] = useState({ name: "", type: "checking", balance: "", isAsset: true });
+  const addNew = () => { if (!form.name) return; addAccount({ name: form.name, type: form.type, balance: parseFloat(form.balance) || 0, isAsset: form.isAsset }); setForm({ name: "", type: "checking", balance: "", isAsset: true }); setOpen(false); };
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <div><CardTitle>Cuentas Patrimoniales</CardTitle><CardDescription>Activos y pasivos que componen tu patrimonio neto</CardDescription></div>
+        <Btn size="sm" variant="outline" onClick={() => setOpen(true)}><Icon name="plus" size={14} /> Agregar Cuenta</Btn>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {accounts.map((acc) => (
+          <div key={acc.id} className="flex items-center justify-between rounded-lg border border-slate-800/60 bg-slate-900/40 px-4 py-3">
+            <div><p className="text-sm text-slate-100">{acc.name}</p><p className="text-[11px] text-slate-500">{ACCOUNT_TYPE_LABEL[acc.type]} · {acc.isAsset ? "Activo" : "Pasivo"}</p></div>
+            <div className="flex items-center gap-3"><span className="text-sm font-medium tabular-nums text-slate-100">{formatCurrency(acc.balance, profile.currency)}</span><button onClick={() => deleteAccount(acc.id)}><Icon name="trash-2" size={14} className="text-slate-500 hover:text-crimson-elegant" /></button></div>
+          </div>
+        ))}
+      </CardContent>
+      <Modal open={open} onClose={() => setOpen(false)} title="Nueva Cuenta" footer={<><Btn variant="ghost" onClick={() => setOpen(false)}>Cancelar</Btn><Btn onClick={addNew}>Agregar</Btn></>}>
+        <div className="space-y-4">
+          <div><Label>Nombre</Label><Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
+          <div><Label>Tipo</Label><Select value={form.type} onChange={(v) => setForm((f) => ({ ...f, type: v }))}>{Object.entries(ACCOUNT_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></div>
+          <div><Label>Saldo</Label><Input type="number" value={form.balance} onChange={(e) => setForm((f) => ({ ...f, balance: e.target.value }))} /></div>
+          <div className="flex items-center justify-between rounded-lg border border-slate-800 px-4 py-3"><p className="text-sm text-slate-100">Es un Activo</p><Switch checked={form.isAsset} onChange={(v) => setForm((f) => ({ ...f, isAsset: v }))} /></div>
+        </div>
+      </Modal>
+    </Card>
+  );
+}
+function SettingsPage() {
+  return (
+    <div className="space-y-6 animate-fade-in max-w-3xl">
+      <div><h2 className="text-xl font-semibold font-display text-slate-100">Ajustes</h2><p className="text-sm text-slate-500">Personalizá tu experiencia y gestioná tus datos.</p></div>
+      <ProfileCard />
+      <CloudSyncCard />
+      <AccountsCard />
+      <Card>
+        <CardHeader><CardTitle>Respaldo de Datos</CardTitle><CardDescription>Exportá o importá toda tu información financiera</CardDescription></CardHeader>
+        <CardContent><ImportExportMenu /></CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/* ============================================================================
+   APP ROOT
+   ============================================================================ */
+function Shell({ children }) {
+  return (
+    <div className="flex min-h-screen bg-onyx-950">
+      <Sidebar />
+      <div className="flex-1 flex flex-col min-w-0">
+        <Header />
+        <main className="flex-1 px-4 md:px-8 py-6 pb-24 md:pb-8 max-w-[1600px] w-full mx-auto">{children}</main>
+      </div>
+      <MobileBar />
+    </div>
+  );
+}
+function AppShellRouter() {
+  const { page } = useNav();
+  return (
+    <Shell>
+      {page === "dashboard" && <DashboardPage />}
+      {page === "transactions" && <TransactionsPage />}
+      {page === "budgets" && <BudgetsPage />}
+      {page === "analytics" && <AnalyticsPage />}
+      {page === "settings" && <SettingsPage />}
+      <QuickAddModal />
+      <TransferModal />
+    </Shell>
+  );
+}
+function App() {
+  return (
+    <NavProvider>
+      <AppDataProvider>
+        <ToastProvider>
+          <AppShellRouter />
+        </ToastProvider>
+      </AppDataProvider>
+    </NavProvider>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
