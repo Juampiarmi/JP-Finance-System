@@ -3,12 +3,45 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
-<title>JP Finance System</title>
+<title>JP Finance System — Seven Tangos</title>
 <meta name="description" content="Sistema ejecutivo de finanzas personales — patrimonio, presupuestos y analítica proyectiva de nivel banca privada." />
 <meta name="theme-color" content="#090D16" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Seven Tangos" />
+<meta name="mobile-web-app-capable" content="yes" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23090D16'/%3E%3Ctext x='16' y='21' font-family='Georgia,serif' font-size='13' font-weight='700' fill='%23D4AF7A' text-anchor='middle'%3EJP%3C/text%3E%3C/svg%3E" />
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA9zQYyAAAHjElEQVR42u3df0zc9R3H8df37rjj4LhWOBHEyrXqWh3TQtvRmQjWLNHEpURN/DWjMXWLGmc0RhMTrRoX/1Nn3B+dK4tZUt0S3Ybt/BHbSlvRdrVDlNjaHisFYgu0BQ4p3HE//MM/1MxN7gvcfb8fno8/Sb/H3bfPvvuG+/G15ADBssqs4HqT40NWoe+DRcAwKXCLiGFS3BYRw6S4LUKGSWF7iBkm/TLAImSYNK09xAyTprVFyDBpWnuIGSZNaw8xw6SoPcQMk6L2EDNMitpDzDApag8xw6SoPcQMk6L2cJpgEg/TGSZNaQ8xw6SoWTlg/srBdIZbp7SHmGFS1KwcMHflYDrD7VOaCQ3zfygEXB806wZMWDuY0GDlABwdNOsGTFk7mNBg5QAIGsgDi/0ZTGiAoAGCBggaBA0QNEDQAEEDBA2CBggaIGiAoAGCBkEDBA0QNDCnfKY8kA0t9br7hlV5/Z7b3j+ip17a5Yj78m3JVFrJZFpjXyZ0auyMBobG1TNwWt09w+qODSmZShM03MPv88rv8ypU4ldNZZkuveicb2KfTqujq19vdsS0u/OYMpksQcPFsRd5tW51VOtWR/XF8Lj+9MbH2rr7sDJZM8Jmh17Azj27TI9tuEIvP9miaPViIx7TgnnX9303rtEdv7gs5+Pe/iCmxze1F3zXb9v1uX7buuc7XwuXBlSxKKjl0Yia6s9Xc0Ot/EVeW/drKpnSU3/cre37/sPKgcKITyQUn0jo6BejevuDmKojId1/c6N+/tOlOd9Wsd+nZ+69SotKA3p950FWDhTe8ZNf6tHf79Cm1w/Y++/akh6543KtWx0laDhHa1unNrd12gvCsrTxriZVR0IEDefY/I9OdfcM2To2VOLXQ7f9jKDhHOl0Rs+/ss/28c0Ntbpk2dkEDef45MigDvaetH389etWEDSc5d299n8N19xQK8siaDhsStu1uKxYF5xXTtBwjkPHTs3q+KXnLiZoOEcimdJUMmX7+KqKEEHDWcYnEraPLQkWETScxZrFT3ZZl728lKAXgHBpwPaxZ6amCRrOUVJcZPsVeNLXrw8haDjGj2f5bF/PwAhBwzm+/farXJ0am1Tv8VGChnNcvfYC28fu3H/UdY+XoA3WWFejpTWLbR2bzUp/e+8QQcMZ/D6vHril0fbx7+7rUaz/NEHDGX5z0xpduMTe6zDiEwn97tV9rnzcBG2g+25co5uvrrN1bCaT1cZN7RoeOePKx86bZA2y5JywHvzlWl2x8nzbMT/dukcdXf2uPQcE7WLh0oDKw0FdsiyipoZaNdXXqshn7z/dM1PTeuIP7Wo/cMzV54SgXaKleblampfPy21/GhvSEy/tUv+JMdefJ4JewPoH42pt69SbHUdkyCeBEfRCM5VMqaOrX291xLSns8+Yz7QjaIOl0hklkmnFJ6Z0cnRSA0Nxxfq//jjdT2ODmk5ljH3sBO0S3/fZdvhv/B4aBA0QNEDQAEGDoAGCBggaIGiAoEHQAEEDBA0QNEDQIGiAoAGCBuYWb8GaBxta6nX3Davm9DZn8jEGz23Zq1ff6WZCAwS9QGQ5BQTtRF6PvYeaMvgt/+zQbg7aa+/SZonpdM7HtLZ1qrWtk7qY0POn2G/v3258FhetBEHPm2CxvSuiDo9MUAlBO8+ikL2LT/adiFMJQTtP5Vmlto473HeKSvihcG79+roG/eq6hu987eEXtqv9QO+Mb6M6Esr5+/YMjGh0fIpKmNDzr6qiNIeYy1RiY4fe83EfhRB0fly8dOaX/L3sR7lfTTWblbbuPkwhBJ0fa+tq5PPO7O5ftTqa8+3v+nev+gy4RANBu0T5oqCuufzCH/xzK6IRNdXndlWo5HRaL/51P3UQdH49eGujLvo/F5esLC/V0/dcKa83t4f5/Ct7mc4u5eqnvsOlAbVuXK+/vNOt7f86qv7BMWWzUlVFSFeuqtUt19SpPBzM6TZf3tal13YcpAyCLoxgwKc716/UnetXzup2plMZPbdlr17b8RlVELS7ffjJgJ7d8qGOHWfNcDsrWFbp+Jf8Bvw+NSyv0tqfnKfGuhotqzlLljW72zw9NqmdH/Xq7+8d4tlAgi6skuIirYhGdHE0oiVVYVVHQqquKFM4FFAw4FOgyCvLspRMpTWZSGk0PqXh0Qn1nRhTz8CIug4PKjZwWllevU/QgJPxFiwQNEDQAEEDBA2CBsxg9DOF+/981z/5K/5+a27ffC0Tmpg5PwTNBOL85A/PFIIJDRA0QNAAQYOgAYIGCBogaICgQdAAQQMEDRA0QNBYWEFPjg9ZnAaYYHJ8yGJCg5UDIGggX0GzR8OE/ZkJDVYOwBVBs3bA7esGExqsHIBrgmbtgJvXDSY0zF85mNJw63T+nxOaqOHGmFk5YP7KwZSGW6fzD05oooabYmblwMJZOZjScNt0nvGEJmq4IeacVg6ihtNjznmHJmo4OWZbPxQSNZwas62giRpOjdl20EQNJ8YsSXMSJdc6RKFDnvWEZlrDaTHP2YRmWsMpw9Dj9DsIYi7ohGZao5BDL2/TlLiJOB/fpyDrAXETsVFBEzgBz5evAKKrbntKX6PSAAAAAElFTkSuQmCC" />
+
+<!-- PWA: manifest embebido vía Data URI (instalable en Android/iOS sin archivos extra) -->
+<script>
+(function () {
+  var ICON_192 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAAAIKUlEQVR42u3df2zU9R3H8df3e/11R++gLfSHtNSlUNbZH7CGLFRE4h9W18mymSzIIvMPt/jPsiwh2chmXLaRZYsuMdsMmSxGZ1x0CWq0c47xQ8coWqvAVCgFWlpM6QHXHqW9Xq93tz+WOGYybb/fQu/7/Twff0K/3/bu3s/v5/vtXe8s5ZhguDwr+FZiPGrl0s9jMewwOQqLoYfJMVgMPkwOwWLwYXIIFoMPk0OwGHyYHILN8MNL5nvGLAYfJq8GNsMPk1cDm+GHyRHYDD9MjsBm+GFyBDbDD5MjsBl+mByBzfDD5Ahshh8mR2Az/DA5Apu7CSazOfrD5FXAZvhhcgScAoFTII7+MHUVYAUAKwBHf5i6CrACgBWAoz9MXQVYAcAKwNEfpq4CrABgBQCMDoDTH5h6GsQKAFYAgAAAAgDMYnEBDFYAgAAAAgAIACAAgAAAAgAIACAAgAAAAgAIACAAgAAAAgAIACAAgACA3JfnxxvV2lClXTs6FuR79w3GtPXHe3Lu57pWOp1RMpVWIjmjy/FJXRyd1MDwmE4PjepY34iGLsQJAP4VCNgKBWyFivJVtjio+hVlurWl5uP/j8YmtL+7X691ndGHZy8SAMxSXrpIW9obtaW9Ucf7RvSHl4/q8PEhrgFgnuZVFXp8e7se396uyrJiAoCZ2ppr9NzOr2tTa62vbpex7wu0++F71LKqwtG2P3rigP525My8/0xPPbJZjXXljrZ96Bed6jkx/N8H1pIiiwpVEg6qrrpEbS012rh2hZaEi1z9jJlsVr9+9oie3/sB1wDIXdmsFL+aVPxqUgPDY9rX3a9QUb6+eXeTtnU0q6jA2UNvW5a2379eydSMXjrYyykQvGNyKqUnX3xX39n5qmLxhKt97Xhgg5odrqAEgAV1ov+SHvz5KxqfnHY+OLalnz20SYUFeQQA7xkauaKfPvmmq33ctCysLXfeQgDwpoM9Azp01N3v97fe1ai8gE0A8KZnOo+52r40EtSGNSsIAN70Xu8FDV+66mof176MggDgyQjcWLO6ggDgXR+cjbravro8ooBHrwMIABq9MuVq+7yArdJIEQHAm+JXk673ESzMJwB4U8C2XO8jm80SALwpUlzoeh8TUykCgDeVRoKutp9OpTXm8jqCALBgmlaWu9p+8EJcGU6B4FVrV1e62t7t8wgEgAWzvqlaS5eEXO3jH0cHCQDedH9Hs6vto7EJvfX+RwQA77mrbaXWfeEmV/t4uvOYMpksAcBbPrd8iXY8cKurffR/NKY9+096+n7gb4IN1LKqQo99/06Fipw/e5uayejhXQc0k84QALyhOFSgb3W0aOvdjSrICzjeTzYr/eT3b6j33GXP3ycE4FOWJYVDhSqNBLWypkRtzTW6vbVWkUXunvVNpzPa+dSh6/K2MAQAx27Em+6Ojk/pkV0H1fWv87653wgAs3KwZ0C/fPqwLo1N+up2EQA+Vc+JYe1+6V29c827zhEAfG340rj2dQ/oL//sU99gzNe3lQAMlMlkNT2T1mQipcvxhKKjE//5gIzBmI6eGtH56BVj7gsC8IlPvjkuZodngkEAAAEABAAQAEAAAAEABAAQAEAAAAEABAAQAEAAAAEABAAQAEAAgFfwJ5E3UGtD1XV7/57Z7Hd/d79+8Jt9PBCsAAABAOYG4OaDQb36kaAggI8FAs5vemomzeRwEezxG+4igOS0swB6Tgxr3bbdTB0rwMIrKnDefnwiyeQQgLcVhwocb3txdILJIQAPXwBbcvxBEYnkjC6PJZgcAvCuknBQ+XnObvrpoZhnPxUdPrgIfvHRb6i6PPI///bdX72mI3P4rNqaiojj73/s1AhTwwqQWyqXhuf09fW1ZY6/1+HjQ0wNAeSWxrplc/r61oYqR98nGptQz0negpwAcsyGNStm/Xv9RcF8tTXXOPo+ew6c9PSnosOnAZQtDmrzxvpZfe23v/ZFBQvnfukTu5LQn15/n4khgNz0vfu+pLWrKz/1a+7ZWK+t7U2O9v/oH7s0OZViYnzGNy+FCBXl64kfflkvv9Gr17vO6Mz5UU1OpVQSCerztWXafPtqbWqtdbTvF/Z+qL1vnWVaCCDHb0zA1r13NOjeOxrmbZ+vvHlKjz3bxaQQgFmmU2n97s/deu6vnPf7mRUMl3vq1xo1lYv11Y31+spt9SpbHJz3/WeyWR14Z0C/fb7bqI8LJQCPCQRsrW9artvW1mp903JVzfHJsE86NxzX398+q85DfRoaYfAJwGNurlqiW+qWqa66RHXVJapaGlZxsEDFoQIVFgQ0k84olcpofDKpWDyhkdiEzg3Hdfp8TO/1XlA0xis8CQAwDH8UDwIACAAgAIAAAAIACADwOaNeC9T9zIOdPOSzs27b7g4TbqfN8MPk+8uYAEw5onF/zQ0vhQAXwQABAAQAEABAAAABAAQAEABAAAABAAQAEABAAAABAF4NIDEetbgbYKLEeNRiBQCnQAABAAQAGBgAF8Iw8QKYFQCsANwFIABOg2Dg6Q8rAFgB/l8ZgN+P/qwAYAX4rEIAvx79WQHACjDbUgC/Hf1ZAcAKMNdiAL8c/T9zBSAC+Hn4OQUCp0BuCwK8evSf9QpABPDj8M/pFIgI4Lfhn/M1ABHAT8Pv6CKYCOCX4XcUABHAL8PvOAAigB+G31UARACvD7/rAIgAXh5+SZrX4Q2Gy7M8LPDC4M/bCsBqAK8O/7yvAKwG8MrgX/cACAFeOKu4YacshIBcPJ2+4efshIBcuo5c0ItWYsBCDH3OBEAUDPtC+zd/Mps2x+DvpwAAAABJRU5ErkJggg==";
+  var ICON_512 = "data:image/png;base64,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";
+  var manifest = {
+    short_name: "Seven Tangos",
+    name: "JP Finance System",
+    description: "Sistema ejecutivo de finanzas personales de nivel banca privada.",
+    start_url: "./",
+    id: "./",
+    scope: "./",
+    display: "standalone",
+    orientation: "portrait",
+    background_color: "#090D16",
+    theme_color: "#090D16",
+    icons: [
+      { src: ICON_192, sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: ICON_512, sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: ICON_192, sizes: "192x192", type: "image/png", purpose: "maskable" },
+      { src: ICON_512, sizes: "512x512", type: "image/png", purpose: "maskable" }
+    ]
+  };
+  var link = document.createElement("link");
+  link.rel = "manifest";
+  link.href = "data:application/manifest+json," + encodeURIComponent(JSON.stringify(manifest));
+  document.head.appendChild(link);
+})();
+</script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -91,6 +124,19 @@ function uid() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
   return Date.now() + "-" + Math.random().toString(36).slice(2, 10);
 }
+// Código corto y legible (sin caracteres ambiguos como 0/O o 1/I) que
+// identifica "este grupo de datos" en Supabase, sin necesidad de login.
+// Se genera solo una vez por dispositivo y se puede copiar a otro dispositivo
+// para que ambos compartan la misma información.
+function genSyncCode() {
+  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let out = "";
+  for (let i = 0; i < 8; i++) {
+    if (i === 4) out += "-";
+    out += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return out;
+}
 function formatCurrency(value, currency = "USD", locale = "es-AR") {
   return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
 }
@@ -168,6 +214,107 @@ function computeProjectedCashFlow(transactions) {
     projectedIncome, projectedExpense, projectedCashFlow: projectedIncome - projectedExpense,
     daysRemaining: Math.max(totalDays - elapsedDays, 0), totalDays, elapsedDays,
   };
+}
+// Motor de comparación histórica: gasto del mes actual, por categoría, contra
+// el promedio de los 3 meses anteriores.
+function computeMonthlyComparison(transactions, categories) {
+  const cm = monthKey(new Date().toISOString());
+  const prevMonths = lastNMonths(4).filter((m) => m !== cm);
+  const sumByCategory = (m) => {
+    const map = new Map();
+    transactions.filter((t) => t.type === "expense" && monthKey(t.date) === m).forEach((t) => map.set(t.categoryId, (map.get(t.categoryId) || 0) + t.amount));
+    return map;
+  };
+  const currentMap = sumByCategory(cm);
+  const prevMaps = prevMonths.map(sumByCategory);
+  const allCatIds = new Set([...currentMap.keys(), ...prevMaps.flatMap((m) => Array.from(m.keys()))]);
+  const rows = Array.from(allCatIds).map((cid) => {
+    const cat = categories.find((c) => c.id === cid);
+    const current = currentMap.get(cid) || 0;
+    const avgPrev = prevMaps.reduce((s, m) => s + (m.get(cid) || 0), 0) / (prevMonths.length || 1);
+    const deltaPercent = avgPrev > 0 ? ((current - avgPrev) / avgPrev) * 100 : (current > 0 ? 100 : 0);
+    return { categoryId: cid, name: cat ? cat.name : "Otros", color: cat ? cat.color : "#94A3B8", current, avgPrev, deltaPercent };
+  }).filter((r) => r.current > 0 || r.avgPrev > 0).sort((a, b) => b.deltaPercent - a.deltaPercent);
+  const currentTotal = Array.from(currentMap.values()).reduce((s, v) => s + v, 0);
+  const avgPrevTotal = prevMaps.reduce((sum, m) => sum + Array.from(m.values()).reduce((s, v) => s + v, 0), 0) / (prevMonths.length || 1);
+  const totalDeltaPercent = avgPrevTotal > 0 ? ((currentTotal - avgPrevTotal) / avgPrevTotal) * 100 : 0;
+  return { rows, currentTotal, avgPrevTotal, totalDeltaPercent, monthsCompared: prevMonths.length };
+}
+// AI Financial Copilot: consolida patrimonio, flujo de caja y hábitos de
+// gasto en diagnósticos automáticos de tres tipos: estrategia de compras
+// (gastos mayores a evaluar), optimización de ahorro (gasto hormiga) y
+// sugerencia de inversión de excedentes.
+function computeCopilotDiagnostics(transactions, categories, accounts) {
+  const kpis = computeKPIs(transactions, accounts);
+  const runway = computeEmergencyRunway(transactions, accounts);
+  const comparison = computeMonthlyComparison(transactions, categories);
+  const cm = monthKey(new Date().toISOString());
+  const monthExpenses = transactions.filter((t) => t.type === "expense" && monthKey(t.date) === cm);
+  const monthIncome = transactions.filter((t) => t.type === "income" && monthKey(t.date) === cm).reduce((s, t) => s + t.amount, 0);
+  const diagnostics = [];
+
+  // 1) Comparación histórica: categorías que subieron fuerte vs el promedio
+  comparison.rows.filter((r) => r.deltaPercent >= 30 && r.current >= 20).slice(0, 3).forEach((r) => {
+    diagnostics.push({
+      type: "alerta", icon: "trending-up", title: "Subió tu gasto en " + r.name,
+      detail: "Este mes llevás " + formatCurrency(r.current) + " en " + r.name + ", un " + Math.round(r.deltaPercent) + "% más que tu promedio de los últimos " + comparison.monthsCompared + " meses (" + formatCurrency(r.avgPrev) + ").",
+    });
+  });
+  if (comparison.avgPrevTotal > 0 && comparison.totalDeltaPercent >= 15) {
+    diagnostics.push({
+      type: "alerta", icon: "alert-triangle", title: "Gasto total por encima de tu promedio",
+      detail: "Vas " + formatCurrency(comparison.currentTotal) + " gastados este mes, un " + Math.round(comparison.totalDeltaPercent) + "% más que tu promedio mensual reciente de " + formatCurrency(comparison.avgPrevTotal) + ".",
+    });
+  }
+
+  // 2) Estrategia de compras — evaluador de gastos mayores
+  const biggest = [...monthExpenses].sort((a, b) => b.amount - a.amount)[0];
+  if (biggest && monthIncome > 0 && biggest.amount >= monthIncome * 0.15) {
+    const cat = categories.find((c) => c.id === biggest.categoryId);
+    diagnostics.push({
+      type: "compra", icon: "shopping-bag", title: "Gasto grande para evaluar",
+      detail: "\"" + biggest.description + "\" (" + (cat ? cat.name : "sin categoría") + ") fue de " + formatCurrency(biggest.amount) + " — un " + Math.round((biggest.amount / monthIncome) * 100) + "% de tus ingresos de este mes. Antes de repetir una compra así, evaluá si encaja con tus metas actuales.",
+    });
+  }
+
+  // 3) Optimización de ahorro — gasto hormiga (muchas compras chicas repetidas)
+  const countByCategory = new Map();
+  monthExpenses.forEach((t) => {
+    const e = countByCategory.get(t.categoryId) || { count: 0, total: 0 };
+    e.count += 1; e.total += t.amount;
+    countByCategory.set(t.categoryId, e);
+  });
+  const antTrend = Array.from(countByCategory.entries())
+    .map(([cid, v]) => ({ cid, ...v, avg: v.total / v.count, cat: categories.find((c) => c.id === cid) }))
+    .filter((r) => r.count >= 4 && r.avg > 0 && r.avg <= Math.max(30, monthIncome * 0.01))
+    .sort((a, b) => b.total - a.total)[0];
+  if (antTrend) {
+    diagnostics.push({
+      type: "ahorro", icon: "coins", title: "Gasto hormiga en " + (antTrend.cat ? antTrend.cat.name : "una categoría"),
+      detail: "Hiciste " + antTrend.count + " compras chicas en " + (antTrend.cat ? antTrend.cat.name : "esta categoría") + " este mes (promedio " + formatCurrency(antTrend.avg) + " c/u) que suman " + formatCurrency(antTrend.total) + ". Son gastos que pasan desapercibidos pero pesan en el total.",
+    });
+  }
+
+  // 4) Sugerencia de inversión de excedentes
+  const investedTotal = accounts.filter((a) => a.isAsset && a.type === "investment").reduce((s, a) => s + a.balance, 0);
+  const idleCash = accounts.filter((a) => a.isAsset && ["cash", "wallet", "checking", "savings"].includes(a.type)).reduce((s, a) => s + a.balance, 0);
+  if (kpis.monthlyCashFlow > 0 && runway.months >= runway.targetMonths) {
+    diagnostics.push({
+      type: "inversion", icon: "line-chart", title: "Tenés margen para invertir el excedente",
+      detail: "Tu colchón de emergencia ya cubre " + runway.months.toFixed(1) + " meses (meta: " + runway.targetMonths + "). Este mes te sobraron " + formatCurrency(kpis.monthlyCashFlow) + " — con la reserva ya cubierta, podrías destinar parte de eso a tu fondo de inversión en vez de dejarlo ocioso en efectivo o billeteras.",
+    });
+  } else if (idleCash > 0 && investedTotal === 0 && kpis.monthlyCashFlow > 0) {
+    diagnostics.push({
+      type: "inversion", icon: "line-chart", title: "Todavía no tenés nada invertido",
+      detail: "Tenés " + formatCurrency(idleCash) + " repartidos en efectivo, billeteras y bancos, y ningún fondo de inversión cargado. Una vez cubierto tu colchón de emergencia, considerá empezar a invertir una parte.",
+    });
+  }
+
+  if (diagnostics.length === 0) {
+    diagnostics.push({ type: "info", icon: "check-circle-2", title: "Todo en orden", detail: "No detectamos alertas este mes: tu gasto está en línea con tu promedio reciente y no hay compras grandes ni gasto hormiga fuera de lo normal." });
+  }
+
+  return { diagnostics, kpis, runway, comparison, monthIncome, monthExpensesTotal: monthExpenses.reduce((s, t) => s + t.amount, 0) };
 }
 function computeCompoundInterest({ initial, monthlyContribution, annualRatePercent, years }) {
   const monthlyRate = annualRatePercent / 100 / 12;
@@ -285,7 +432,7 @@ function buildSeedDebts() {
 const KEYS = {
   transactions: "jpfs:transactions", categories: "jpfs:categories", budgets: "jpfs:budgets",
   goals: "jpfs:goals", debts: "jpfs:debts", accounts: "jpfs:accounts", profile: "jpfs:profile",
-  supabaseConfig: "jpfs:supabase-config", seeded: "jpfs:seeded",
+  supabaseConfig: "jpfs:supabase-config", seeded: "jpfs:seeded", syncCode: "jpfs:sync-code",
 };
 function loadLocal(key, fallback) {
   try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch (e) { return fallback; }
@@ -357,7 +504,7 @@ function NavProvider({ children }) {
 
   const setPage = useCallback((p) => { setPageState(p); if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" }); }, []);
   const goHome = useCallback(() => setPage("dashboard"), [setPage]);
-  const openMovement = useCallback((type) => setMovement({ type }), []);
+  const openMovement = useCallback((type, categoryId) => setMovement({ type, categoryId: categoryId || null }), []);
   const closeMovement = useCallback(() => setMovement(null), []);
 
   const value = { page, setPage, goHome, movement, openMovement, closeMovement };
@@ -387,10 +534,28 @@ function AppDataProvider({ children }) {
   const [accounts, setAccounts] = useState(() => loadLocal(KEYS.accounts, DEFAULT_ACCOUNTS));
   const [profile, setProfile] = useState(() => loadLocal(KEYS.profile, DEFAULT_PROFILE));
   const [supabaseConfig, setSupabaseConfig] = useState(() => loadLocal(KEYS.supabaseConfig, { url: "", anonKey: "" }));
-  const [cloudUser, setCloudUser] = useState(null);
+  // Sincronización directa por código de dispositivo: SIN email, SIN magic
+  // link. Cada tabla en Supabase se filtra por esta columna "device_code" en
+  // vez de un user_id de Supabase Auth — se ingresa el mismo código en dos
+  // dispositivos y sus datos se sincronizan automáticamente entre ellos.
+  const [syncCode, setSyncCodeState] = useState(() => {
+    const saved = loadLocal(KEYS.syncCode, null);
+    if (saved) return saved;
+    const fresh = genSyncCode();
+    saveLocal(KEYS.syncCode, fresh);
+    return fresh;
+  });
   const [cloudClient, setCloudClient] = useState(null);
   const [syncing, setSyncing] = useState(false);
-  const hydrated = useRef(false);
+  const [lastSyncAt, setLastSyncAt] = useState(null);
+  const hydratedKey = useRef(null);
+
+  const setSyncCode = useCallback((code) => {
+    const clean = (code || "").trim().toUpperCase();
+    setSyncCodeState(clean);
+    saveLocal(KEYS.syncCode, clean);
+    hydratedKey.current = null; // forzar re-hidratación con el nuevo código
+  }, []);
 
   useEffect(() => { if (!localStorage.getItem(KEYS.seeded)) localStorage.setItem(KEYS.seeded, "1"); }, []);
   useEffect(() => saveLocal(KEYS.transactions, transactions), [transactions]);
@@ -402,52 +567,61 @@ function AppDataProvider({ children }) {
   useEffect(() => saveLocal(KEYS.profile, profile), [profile]);
   useEffect(() => saveLocal(KEYS.supabaseConfig, supabaseConfig), [supabaseConfig]);
 
-  // Inicializa el cliente de Supabase si hay credenciales guardadas
+  // Conecta directo a Supabase con la URL + Anon Key guardadas. No hay
+  // inicio de sesión: la conexión queda lista apenas se guarda la config.
   useEffect(() => {
     if (!supabaseConfig.url || !supabaseConfig.anonKey || !window.supabase) { setCloudClient(null); return; }
     try {
-      const client = window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey);
+      const client = window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey, { auth: { persistSession: false } });
       setCloudClient(client);
-      client.auth.getSession().then(({ data }) => setCloudUser(data.session ? data.session.user : null));
-      const { data: listener } = client.auth.onAuthStateChange((_e, session) => setCloudUser(session ? session.user : null));
-      return () => listener.subscription.unsubscribe();
     } catch (e) { setCloudClient(null); }
   }, [supabaseConfig.url, supabaseConfig.anonKey]);
 
-  // Hidratación desde la nube al iniciar sesión
-  useEffect(() => {
-    if (!cloudClient || !cloudUser || hydrated.current) return;
-    hydrated.current = true;
+  const pullFromCloud = useCallback(async () => {
+    if (!cloudClient || !syncCode) return { success: false, error: "Faltan datos de conexión." };
     setSyncing(true);
-    (async () => {
-      try {
-        const [txRes, budRes, goalRes] = await Promise.all([
-          cloudClient.from("transactions").select("*").eq("user_id", cloudUser.id),
-          cloudClient.from("budgets").select("*").eq("user_id", cloudUser.id),
-          cloudClient.from("goals").select("*").eq("user_id", cloudUser.id),
-        ]);
-        if (txRes.data && txRes.data.length) {
-          setTransactions(txRes.data.map((r) => ({ id: r.id, date: r.date, description: r.description, amount: Number(r.amount), type: r.type, categoryId: r.category_id, account: r.account || "", notes: r.notes || undefined, isRecurring: r.is_recurring || false, recurrence: r.recurrence || undefined, createdAt: r.created_at, updatedAt: r.updated_at })));
-        }
-        if (budRes.data && budRes.data.length) {
-          setBudgets(budRes.data.map((r) => ({ id: r.id, categoryId: r.category_id, monthlyLimit: Number(r.monthly_limit), month: r.month })));
-        }
-        if (goalRes.data && goalRes.data.length) {
-          setGoals(goalRes.data.map((r) => ({ id: r.id, name: r.name, type: r.type, targetAmount: Number(r.target_amount), currentAmount: Number(r.current_amount), targetDate: r.target_date || undefined, color: r.color, createdAt: r.created_at })));
-        }
-      } catch (e) { console.warn("Sync error", e); }
+    try {
+      const [txRes, budRes, goalRes] = await Promise.all([
+        cloudClient.from("transactions").select("*").eq("device_code", syncCode),
+        cloudClient.from("budgets").select("*").eq("device_code", syncCode),
+        cloudClient.from("goals").select("*").eq("device_code", syncCode),
+      ]);
+      if (txRes.error) throw txRes.error;
+      if (txRes.data && txRes.data.length) {
+        setTransactions(txRes.data.map((r) => ({ id: r.id, date: r.date, description: r.description, amount: Number(r.amount), type: r.type, categoryId: r.category_id, account: r.account || "", notes: r.notes || undefined, isRecurring: r.is_recurring || false, recurrence: r.recurrence || undefined, fromAccountId: r.from_account_id || undefined, toAccountId: r.to_account_id || undefined, createdAt: r.created_at, updatedAt: r.updated_at })));
+      }
+      if (budRes.data && budRes.data.length) {
+        setBudgets(budRes.data.map((r) => ({ id: r.id, categoryId: r.category_id, monthlyLimit: Number(r.monthly_limit), month: r.month })));
+      }
+      if (goalRes.data && goalRes.data.length) {
+        setGoals(goalRes.data.map((r) => ({ id: r.id, name: r.name, type: r.type, targetAmount: Number(r.target_amount), currentAmount: Number(r.current_amount), targetDate: r.target_date || undefined, color: r.color, createdAt: r.created_at })));
+      }
+      setLastSyncAt(new Date().toISOString());
       setSyncing(false);
-    })();
-  }, [cloudClient, cloudUser]);
+      return { success: true };
+    } catch (e) {
+      setSyncing(false);
+      return { success: false, error: (e && e.message) || "No se pudo sincronizar. Revisá la URL, la clave y que la tabla tenga la columna device_code." };
+    }
+  }, [cloudClient, syncCode]);
+
+  // Hidratación automática la primera vez que hay conexión + código listos
+  useEffect(() => {
+    if (!cloudClient || !syncCode) return;
+    const key = syncCode;
+    if (hydratedKey.current === key) return;
+    hydratedKey.current = key;
+    pullFromCloud();
+  }, [cloudClient, syncCode, pullFromCloud]);
 
   const pushCloud = useCallback((table, row) => {
-    if (!cloudClient || !cloudUser) return;
-    cloudClient.from(table).upsert({ ...row, user_id: cloudUser.id }).then(({ error }) => { if (error) console.warn(error); });
-  }, [cloudClient, cloudUser]);
+    if (!cloudClient || !syncCode) return;
+    cloudClient.from(table).upsert({ ...row, device_code: syncCode }).then(({ error }) => { if (error) console.warn(error); else setLastSyncAt(new Date().toISOString()); });
+  }, [cloudClient, syncCode]);
   const removeCloud = useCallback((table, id) => {
-    if (!cloudClient || !cloudUser) return;
-    cloudClient.from(table).delete().eq("id", id).eq("user_id", cloudUser.id).then(() => {});
-  }, [cloudClient, cloudUser]);
+    if (!cloudClient || !syncCode) return;
+    cloudClient.from(table).delete().eq("id", id).eq("device_code", syncCode).then(() => {});
+  }, [cloudClient, syncCode]);
 
   const addTransaction = useCallback((t) => {
     const now = new Date().toISOString();
@@ -588,20 +762,14 @@ function AppDataProvider({ children }) {
     } catch (e) { return { success: false, imported: 0, error: "No se pudo procesar el archivo CSV." }; }
   }, []);
 
-  const signInWithEmail = useCallback(async (email) => {
-    if (!cloudClient) return { error: "Configurá primero tu URL y clave de Supabase." };
-    const { error } = await cloudClient.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
-    return { error: error ? error.message : null };
-  }, [cloudClient]);
-  const signOut = useCallback(async () => { if (cloudClient) await cloudClient.auth.signOut(); }, [cloudClient]);
-
   const value = {
     transactions, categories, budgets, goals, debts, accounts, profile,
-    supabaseConfig, setSupabaseConfig, cloudUser, syncing, cloudEnabled: !!cloudClient,
+    supabaseConfig, setSupabaseConfig, syncCode, setSyncCode, syncing, lastSyncAt, pullFromCloud,
+    cloudEnabled: !!cloudClient && !!syncCode,
     addTransaction, updateTransaction, deleteTransaction, bulkAddTransactions, addTransfer, duplicateTransaction,
     upsertBudget, deleteBudget, addGoal, updateGoal, deleteGoal, addDebt, deleteDebt,
     addAccount, deleteAccount, resetAllData, updateProfile, toggleHideBalances,
-    exportJSON, importJSON, exportCSV, importCSV, signInWithEmail, signOut,
+    exportJSON, importJSON, exportCSV, importCSV,
   };
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 }
@@ -659,29 +827,12 @@ function Select({ value, onChange, children, className = "" }) {
     </div>
   );
 }
-function Modal({ open, onClose, title, description, children, footer }) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in" onClick={onClose}></div>
-      <div className="relative z-10 w-full max-w-lg rounded-xl border border-slate-800 bg-slate-950/95 backdrop-blur-xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-thin animate-fade-in">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-semibold font-display text-slate-100">{title}</h3>
-            {description && <p className="text-sm text-slate-500 mt-1">{description}</p>}
-          </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-200 shrink-0 ml-4"><Icon name="x" size={18} /></button>
-        </div>
-        {children}
-        {footer && <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-4 gap-2 sm:gap-0">{footer}</div>}
-      </div>
-    </div>
-  );
-}
-// Panel: bloque desplegable EN LÍNEA (no flotante, no se superpone a nada).
-// Se usa en vez de Modal para las acciones frecuentes (cargar movimientos,
+// Panel: bloque desplegable EN LÍNEA (no flotante, nunca se superpone a
+// nada — reemplaza por completo a los modales flotantes de versiones
+// anteriores). Se usa para TODAS las acciones de carga/edición de la app:
+// movimientos, transferencias, cuentas, presupuestos, deudas y metas.
 // transferir, editar) para que solo haya una capa visual activa a la vez.
-function Panel({ open, onClose, title, description, children, tone = "champagne" }) {
+function Panel({ open, onClose, title, description, children, footer, tone = "champagne" }) {
   if (!open) return null;
   const toneBorder = { champagne: "border-champagne/30", emerald: "border-emerald-metallic/30", crimson: "border-crimson-elegant/30", cobalt: "border-cobalt/30" };
   return (
@@ -694,6 +845,7 @@ function Panel({ open, onClose, title, description, children, tone = "champagne"
         <button onClick={onClose} className="text-slate-500 hover:text-slate-200 shrink-0"><Icon name="x" size={18} /></button>
       </div>
       {children}
+      {footer && <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-4 gap-2 sm:gap-0">{footer}</div>}
     </div>
   );
 }
@@ -801,9 +953,10 @@ const NAV_ITEMS = [
   { key: "transactions", label: "Transacciones", icon: "arrow-left-right" },
   { key: "budgets", label: "Presupuestos", icon: "pie-chart" },
   { key: "analytics", label: "Patrimonio", icon: "line-chart" },
+  { key: "copilot", label: "Copiloto IA", icon: "sparkles" },
   { key: "settings", label: "Ajustes", icon: "settings" },
 ];
-const PAGE_LABEL = { dashboard: "Dashboard", transactions: "Transacciones", budgets: "Presupuestos", analytics: "Patrimonio", settings: "Ajustes" };
+const PAGE_LABEL = { dashboard: "Dashboard", transactions: "Transacciones", budgets: "Presupuestos", analytics: "Patrimonio", copilot: "Copiloto IA", settings: "Ajustes" };
 
 function Sidebar() {
   const { page, setPage, goHome } = useNav();
@@ -858,9 +1011,9 @@ function MobileBar() {
   );
 }
 function Header() {
-  const { profile, toggleHideBalances, cloudEnabled, cloudUser } = useApp();
+  const { profile, toggleHideBalances, cloudEnabled } = useApp();
   const { page, goHome } = useNav();
-  const syncedLabel = cloudEnabled && cloudUser ? "Cloud" : "Local";
+  const syncedLabel = cloudEnabled ? "Cloud" : "Local";
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-4 md:px-8 border-b border-slate-800/70 bg-onyx-950/70 backdrop-blur-xl gap-3">
       <div className="flex items-center gap-3 min-w-0">
@@ -1103,13 +1256,16 @@ function RecentTransactions() {
 }
 function QuickActionsPanel() {
   const { movement, openMovement, closeMovement } = useNav();
+  const { transactions, categories } = useApp();
   const toggle = (type) => { if (movement && movement.type === type) closeMovement(); else openMovement(type); };
+  const topExpenseCats = useMemo(() => mostUsedCategories(transactions, categories, "expense", 6), [transactions, categories]);
   return (
     <Card>
       <CardContent className="p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2"><Icon name="zap" size={15} className="text-champagne" /><CardTitle className="!text-slate-300">Acciones Rápidas</CardTitle></div>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2"><Icon name="zap" size={15} className="text-champagne" /><CardTitle className="!text-slate-300">Carga Exprès Diaria</CardTitle></div>
         </div>
+        <p className="text-[11px] text-slate-500 mb-4">Registrá un movimiento en 3 segundos: elegí, cargá el monto y listo.</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button onClick={() => toggle("income")} className={cx("group flex items-center justify-center gap-2 rounded-xl border py-4 text-sm font-semibold transition-colors", movement && movement.type === "income" ? "border-emerald-metallic bg-emerald-metallic/25 text-emerald-metallic" : "border-emerald-metallic/30 bg-emerald-metallic/10 hover:bg-emerald-metallic/20 text-emerald-metallic")}>
             <Icon name="plus-circle" size={18} /> Ingreso
@@ -1121,6 +1277,18 @@ function QuickActionsPanel() {
             <Icon name="arrow-left-right" size={18} /> Transferencia
           </button>
         </div>
+        {topExpenseCats.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-slate-800/70">
+            <p className="text-[11px] text-slate-500 uppercase tracking-wider mb-2">Un toque para cargar un gasto común</p>
+            <div className="flex flex-wrap gap-2">
+              {topExpenseCats.map((c) => (
+                <button key={c.id} onClick={() => openMovement("expense", c.id)} className="inline-flex items-center gap-1.5 rounded-full border border-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-700 transition-colors">
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: c.color }}></span>{c.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -1142,12 +1310,12 @@ function MovementPanel() {
 
   useEffect(() => {
     if (!open) return;
-    setCategoryId(""); setAmount(""); setDescription("");
+    setCategoryId((movement && movement.categoryId) || ""); setAmount(""); setDescription("");
     setAccount((accounts[0] || {}).name || "");
     setFromId((accounts[0] || {}).id || ""); setToId((accounts[1] || {}).id || "");
     setDate(new Date().toISOString().slice(0, 10));
     // eslint-disable-next-line
-  }, [open, type]);
+  }, [open, type, movement && movement.categoryId]);
 
   const chips = useMemo(() => type === "transfer" ? [] : mostUsedCategories(transactions, categories, type), [transactions, categories, type]);
   const selectedCategory = categories.find((c) => c.id === categoryId);
@@ -1285,12 +1453,63 @@ function ProjectedCashFlowWidget() {
     </Card>
   );
 }
+function DailySpendFilter() {
+  const { transactions, categories, profile } = useApp();
+  const [range, setRange] = useState("today"); // "today" | "week"
+  const [categoryId, setCategoryId] = useState("all");
+
+  const { total, byCategory } = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 6);
+    const weekAgoStr = weekAgo.toISOString().slice(0, 10);
+    const inRange = (t) => (range === "today" ? t.date === todayStr : t.date >= weekAgoStr);
+    const expenses = transactions.filter((t) => t.type === "expense" && inRange(t));
+    const map = new Map();
+    expenses.forEach((t) => map.set(t.categoryId, (map.get(t.categoryId) || 0) + t.amount));
+    const byCategory = Array.from(map.entries()).map(([cid, value]) => {
+      const cat = categories.find((c) => c.id === cid);
+      return { id: cid, name: cat ? cat.name : "Otros", color: cat ? cat.color : "#94A3B8", value };
+    }).sort((a, b) => b.value - a.value);
+    const filtered = categoryId === "all" ? expenses : expenses.filter((t) => t.categoryId === categoryId);
+    const total = filtered.reduce((s, t) => s + t.amount, 0);
+    return { total, byCategory };
+  }, [transactions, categories, range, categoryId]);
+
+  const activeCatName = categoryId === "all" ? null : (byCategory.find((c) => c.id === categoryId) || {}).name;
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <div className="flex items-center gap-2"><Icon name="filter" size={15} className="text-champagne" /><CardTitle className="!text-slate-300">Cuánto Gasté — Filtro Rápido</CardTitle></div>
+        <Tabs tabs={[{ value: "today", label: "Hoy" }, { value: "week", label: "Esta Semana" }]} value={range} onChange={(v) => { setRange(v); setCategoryId("all"); }} />
+      </CardHeader>
+      <CardContent>
+        <div className="text-3xl font-semibold font-display text-slate-100 tabular-nums"><AmountText value={total} currency={profile.currency} /></div>
+        <p className="text-[11px] text-slate-500 mt-1 mb-4">{activeCatName ? "Gastado en " + activeCatName : "Gastado en total"} · {range === "today" ? "hoy" : "en los últimos 7 días"}</p>
+        {byCategory.length === 0 ? (
+          <p className="text-sm text-slate-500 py-4 text-center">Sin gastos registrados en este período.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setCategoryId("all")} className={cx("inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition-colors", categoryId === "all" ? "border-champagne/50 bg-champagne/10 text-champagne" : "border-slate-800 text-slate-400 hover:border-slate-700")}>Todas</button>
+            {byCategory.map((c) => (
+              <button key={c.id} onClick={() => setCategoryId(c.id)} className={cx("inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors", categoryId === c.id ? "border-transparent" : "border-slate-800 text-slate-400 hover:border-slate-700")} style={categoryId === c.id ? { backgroundColor: c.color + "26", color: c.color, borderColor: c.color + "80" } : {}}>
+                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: c.color }}></span>{c.name} · {formatCurrency(c.value, profile.currency)}
+              </button>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 function DashboardPage() {
   return (
     <div className="space-y-6 animate-fade-in">
-      <KpiCards />
       <QuickActionsPanel />
       <MovementPanel />
+      <DailySpendFilter />
+      <KpiCards />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <EmergencyRunwayWidget />
         <ProjectedCashFlowWidget />
@@ -1648,12 +1867,12 @@ function BudgetLimits() {
           );
         })}
       </CardContent>
-      <Modal open={open} onClose={() => setOpen(false)} title="Nuevo Límite de Presupuesto" footer={<><Btn variant="ghost" onClick={() => setOpen(false)}>Cancelar</Btn><Btn onClick={save}><Icon name="settings-2" size={15} /> Guardar Límite</Btn></>}>
+      <Panel open={open} onClose={() => setOpen(false)} title="Nuevo Límite de Presupuesto" footer={<><Btn variant="ghost" onClick={() => setOpen(false)}>Cancelar</Btn><Btn onClick={save}><Icon name="settings-2" size={15} /> Guardar Límite</Btn></>}>
         <div className="space-y-4">
           <div><Label>Categoría</Label><Select value={categoryId} onChange={setCategoryId}><option value="">Elegir categoría</option>{expenseCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></div>
           <div><Label>Límite Mensual</Label><Input type="number" min="0" step="0.01" placeholder="0.00" value={limit} onChange={(e) => setLimit(e.target.value)} /></div>
         </div>
-      </Modal>
+      </Panel>
     </Card>
   );
 }
@@ -1742,7 +1961,7 @@ function DebtManager() {
           </>
         )}
       </CardContent>
-      <Modal open={open} onClose={() => setOpen(false)} title="Nueva Deuda" footer={<><Btn variant="ghost" onClick={() => setOpen(false)}>Cancelar</Btn><Btn onClick={addNew}>Agregar</Btn></>}>
+      <Panel open={open} onClose={() => setOpen(false)} title="Nueva Deuda" footer={<><Btn variant="ghost" onClick={() => setOpen(false)}>Cancelar</Btn><Btn onClick={addNew}>Agregar</Btn></>}>
         <div className="space-y-4">
           <div><Label>Nombre</Label><Input placeholder="Ej: Tarjeta de Crédito" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
           <div className="grid grid-cols-2 gap-3">
@@ -1751,7 +1970,7 @@ function DebtManager() {
           </div>
           <div><Label>Pago Mínimo Mensual</Label><Input type="number" min="0" value={form.minimum} onChange={(e) => setForm((f) => ({ ...f, minimum: e.target.value }))} /></div>
         </div>
-      </Modal>
+      </Panel>
     </Card>
   );
 }
@@ -1794,7 +2013,7 @@ function GoalsTracker() {
           </div>
         )}
       </CardContent>
-      <Modal open={open} onClose={() => setOpen(false)} title="Nueva Meta" footer={<><Btn variant="ghost" onClick={() => setOpen(false)}>Cancelar</Btn><Btn onClick={addNew}>Crear Meta</Btn></>}>
+      <Panel open={open} onClose={() => setOpen(false)} title="Nueva Meta" footer={<><Btn variant="ghost" onClick={() => setOpen(false)}>Cancelar</Btn><Btn onClick={addNew}>Crear Meta</Btn></>}>
         <div className="space-y-4">
           <div><Label>Nombre</Label><Input placeholder="Ej: Fondo de Emergencia" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
           <div><Label>Tipo</Label><Select value={form.type} onChange={(v) => setForm((f) => ({ ...f, type: v }))}>{Object.entries(GOAL_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></div>
@@ -1804,10 +2023,10 @@ function GoalsTracker() {
           </div>
           <div><Label>Fecha Objetivo (opcional)</Label><Input type="date" value={form.targetDate} onChange={(e) => setForm((f) => ({ ...f, targetDate: e.target.value }))} /></div>
         </div>
-      </Modal>
-      <Modal open={!!contributeId} onClose={() => setContributeId(null)} title="Aportar a la Meta" footer={<><Btn variant="ghost" onClick={() => setContributeId(null)}>Cancelar</Btn><Btn onClick={contribute}>Confirmar Aporte</Btn></>}>
+      </Panel>
+      <Panel open={!!contributeId} onClose={() => setContributeId(null)} title="Aportar a la Meta" footer={<><Btn variant="ghost" onClick={() => setContributeId(null)}>Cancelar</Btn><Btn onClick={contribute}>Confirmar Aporte</Btn></>}>
         <div><Label>Monto a Aportar</Label><Input type="number" min="0" value={contributeAmount} onChange={(e) => setContributeAmount(e.target.value)} /></div>
-      </Modal>
+      </Panel>
     </Card>
   );
 }
@@ -1823,9 +2042,117 @@ function AnalyticsPage() {
 }
 
 /* ============================================================================
+   AI FINANCIAL COPILOT
+   ============================================================================ */
+const DIAGNOSTIC_TONE = {
+  alerta: { color: "#F43F5E", bg: "bg-crimson-elegant/10", border: "border-crimson-elegant/30", badge: "crimson", label: "Alerta" },
+  compra: { color: "#D4AF7A", bg: "bg-champagne/10", border: "border-champagne/30", badge: "champagne", label: "Estrategia de Compras" },
+  ahorro: { color: "#3B82F6", bg: "bg-cobalt/10", border: "border-cobalt/30", badge: "cobalt", label: "Optimización de Ahorro" },
+  inversion: { color: "#10B981", bg: "bg-emerald-metallic/10", border: "border-emerald-metallic/30", badge: "emerald", label: "Inversión de Excedentes" },
+  info: { color: "#10B981", bg: "bg-emerald-metallic/10", border: "border-emerald-metallic/30", badge: "emerald", label: "Estado General" },
+};
+function buildAIPrompt(data, profile) {
+  const { diagnostics, kpis, runway, comparison, monthIncome, monthExpensesTotal } = data;
+  const lines = [];
+  lines.push("Actuá como un asesor financiero personal, cercano y concreto. Analizá esta situación financiera (los datos están anonimizados, sin nombres ni descripciones personales) y dame recomendaciones accionables en español.");
+  lines.push("");
+  lines.push("DATOS FINANCIEROS:");
+  lines.push("- Dinero total disponible: " + formatCurrency(kpis.netWorth, profile.currency));
+  lines.push("- Disponible este mes (ingresos - gastos): " + formatCurrency(kpis.monthlyCashFlow, profile.currency));
+  lines.push("- Tasa de ahorro del mes: " + kpis.savingsRate.toFixed(1) + "%");
+  lines.push("- Meses de colchón / respaldo con fondos líquidos: " + runway.months.toFixed(1) + " (meta recomendada: " + runway.targetMonths + ")");
+  lines.push("- Ingresos de este mes: " + formatCurrency(monthIncome, profile.currency));
+  lines.push("- Gastos de este mes: " + formatCurrency(monthExpensesTotal, profile.currency));
+  if (comparison.avgPrevTotal > 0) {
+    lines.push("- Comparado con el promedio de los últimos " + comparison.monthsCompared + " meses (" + formatCurrency(comparison.avgPrevTotal, profile.currency) + "), este mes el gasto varió " + (comparison.totalDeltaPercent >= 0 ? "+" : "") + comparison.totalDeltaPercent.toFixed(1) + "%.");
+  }
+  if (comparison.rows.length > 0) {
+    lines.push("- Categorías de gasto de este mes (de mayor a menor variación vs promedio):");
+    comparison.rows.slice(0, 8).forEach((r) => {
+      lines.push("   · " + r.name + ": " + formatCurrency(r.current, profile.currency) + " (" + (r.deltaPercent >= 0 ? "+" : "") + r.deltaPercent.toFixed(0) + "% vs promedio)");
+    });
+  }
+  lines.push("");
+  lines.push("DIAGNÓSTICOS AUTOMÁTICOS DEL SISTEMA:");
+  diagnostics.forEach((d) => lines.push("- [" + DIAGNOSTIC_TONE[d.type].label + "] " + d.title + ": " + d.detail));
+  lines.push("");
+  lines.push("Con esta información dame, en formato breve:");
+  lines.push("1. Una evaluación general de mi salud financiera (1-2 líneas).");
+  lines.push("2. Tres acciones concretas para optimizar mi ahorro este mes.");
+  lines.push("3. Una recomendación puntual sobre qué hacer con el excedente disponible este mes.");
+  return lines.join("\n");
+}
+function AICopilotPage() {
+  const { transactions, categories, accounts, profile } = useApp();
+  const { toast } = useToast();
+  const data = useMemo(() => computeCopilotDiagnostics(transactions, categories, accounts), [transactions, categories, accounts]);
+  const copyPrompt = async () => {
+    const prompt = buildAIPrompt(data, profile);
+    try {
+      await navigator.clipboard.writeText(prompt);
+      toast({ title: "Diagnóstico copiado", description: "Pegalo en ChatGPT, Gemini o el asistente que prefieras.", variant: "success" });
+    } catch (e) {
+      toast({ title: "No se pudo copiar automáticamente", description: "Seleccioná y copiá el texto manualmente.", variant: "error" });
+    }
+  };
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold font-display text-slate-100 flex items-center gap-2"><Icon name="sparkles" size={20} className="text-champagne" /> Copiloto Financiero IA</h2>
+          <p className="text-sm text-slate-500">Diagnósticos automáticos sobre tus compras, tu ahorro y tus excedentes — listos para pedirle una segunda opinión a una IA.</p>
+        </div>
+        <Btn onClick={copyPrompt}><Icon name="bot" size={16} /> Copiar Diagnóstico para IA</Btn>
+      </div>
+
+      <Card>
+        <CardHeader><CardTitle>Comparación con tu Promedio Histórico</CardTitle><CardDescription>Gasto de este mes vs. el promedio de los últimos {data.comparison.monthsCompared} meses, por categoría</CardDescription></CardHeader>
+        <CardContent>
+          {data.comparison.rows.length === 0 ? (
+            <p className="text-sm text-slate-500 py-6 text-center">Todavía no hay suficiente historial para comparar.</p>
+          ) : (
+            <div className="space-y-3">
+              {data.comparison.rows.slice(0, 8).map((r) => (
+                <div key={r.categoryId} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0"><span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: r.color }}></span><span className="text-sm text-slate-300 truncate">{r.name}</span></div>
+                  <div className="flex items-center gap-3 shrink-0 pl-2">
+                    <span className="text-sm tabular-nums text-slate-100">{formatCurrency(r.current, profile.currency)}</span>
+                    <Badge variant={r.deltaPercent > 15 ? "crimson" : r.deltaPercent < -15 ? "emerald" : "default"}>{r.deltaPercent >= 0 ? "+" : ""}{r.deltaPercent.toFixed(0)}%</Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div>
+        <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">Diagnósticos</h3>
+        <div className="space-y-3">
+          {data.diagnostics.map((d, i) => {
+            const tone = DIAGNOSTIC_TONE[d.type];
+            return (
+              <Card key={i} className={cx("border", tone.border)}>
+                <CardContent className={cx("p-5 flex items-start gap-4", tone.bg)}>
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: tone.color + "26", color: tone.color }}><Icon name={d.icon} size={17} /></div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap"><p className="text-sm font-semibold text-slate-100">{d.title}</p><Badge variant={tone.badge}>{tone.label}</Badge></div>
+                    <p className="text-sm text-slate-400 mt-1">{d.detail}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
    SETTINGS PAGE
    ============================================================================ */
-const SQL_SCHEMA = "-- Ver schema.sql completo entregado junto al proyecto Next.js.\\n-- Resumen de tablas: profiles, categories, transactions, budgets, goals.\\n-- Incluye Row Level Security por usuario y triggers de updated_at.";
+const SQL_SCHEMA = "-- Ver schema.sql entregado junto a este archivo.\\n-- Tablas: transactions, budgets, goals — todas filtradas por la columna\\n-- device_code (texto libre) en vez de un user_id de Supabase Auth.";
 function ProfileCard() {
   const { profile, updateProfile } = useApp();
   const CURRENCIES = ["USD", "EUR", "ARS", "GBP", "CHF"];
@@ -1844,41 +2171,57 @@ function ProfileCard() {
   );
 }
 function CloudSyncCard() {
-  const { supabaseConfig, setSupabaseConfig, cloudEnabled, cloudUser, signInWithEmail, signOut } = useApp();
+  const { supabaseConfig, setSupabaseConfig, syncCode, setSyncCode, cloudEnabled, syncing, lastSyncAt, pullFromCloud } = useApp();
   const { toast } = useToast();
-  const [urlField, setUrlField] = useState(supabaseConfig.url); const [keyField, setKeyField] = useState(supabaseConfig.anonKey);
-  const [email, setEmail] = useState(""); const [sending, setSending] = useState(false);
-  const saveConfig = () => { setSupabaseConfig({ url: urlField.trim(), anonKey: keyField.trim() }); toast({ title: "Configuración de Supabase guardada", variant: "success" }); };
-  const doSignIn = async () => {
-    if (!email.trim()) return;
-    setSending(true);
-    const { error } = await signInWithEmail(email.trim());
-    setSending(false);
-    toast(error ? { title: "No se pudo enviar el enlace", description: error, variant: "error" } : { title: "Revisá tu email", description: "Te enviamos un enlace mágico para iniciar sesión.", variant: "success" });
+  const [urlField, setUrlField] = useState(supabaseConfig.url);
+  const [keyField, setKeyField] = useState(supabaseConfig.anonKey);
+  const [codeField, setCodeField] = useState(syncCode || "");
+
+  const saveConfig = () => {
+    setSupabaseConfig({ url: urlField.trim(), anonKey: keyField.trim() });
+    if (codeField.trim()) setSyncCode(codeField.trim());
+    toast({ title: "Conectado — sin necesidad de iniciar sesión", description: "Ingresá el mismo código en tu otro dispositivo para compartir los datos.", variant: "success" });
   };
+  const copyCode = async () => {
+    try { await navigator.clipboard.writeText(syncCode); toast({ title: "Código copiado", description: syncCode, variant: "success" }); }
+    catch (e) { toast({ title: "No se pudo copiar", description: "Copialo manualmente: " + syncCode, variant: "error" }); }
+  };
+  const regenerate = () => { const fresh = genSyncCode(); setCodeField(fresh); setSyncCode(fresh); toast({ title: "Nuevo código generado", description: fresh, variant: "info" }); };
+  const syncNow = async () => {
+    const r = await pullFromCloud();
+    toast(r.success ? { title: "Sincronizado con la nube", variant: "success" } : { title: "No se pudo sincronizar", description: r.error, variant: "error" });
+  };
+
   return (
     <Card>
-      <CardHeader><CardTitle>Sincronización en la Nube</CardTitle><CardDescription>Multi-dispositivo con Supabase — con fallback automático a LocalStorage</CardDescription></CardHeader>
+      <CardHeader><CardTitle>Sincronización Directa (PC y Celular)</CardTitle><CardDescription>Sin email, sin enlaces mágicos — conectás con tu Project URL, Anon Key y un código propio</CardDescription></CardHeader>
       <CardContent className="space-y-4">
-        {!cloudEnabled ? (
-          <div className="space-y-3">
-            <p className="text-sm text-slate-400">Pegá la URL y la clave anónima (anon key) de tu proyecto de Supabase (Project Settings → API) para activar la sincronización cloud. Ejecutá antes el <code className="text-champagne">schema.sql</code> provisto. Sin esto, la app funciona 100% offline con LocalStorage.</p>
-            <div><Label>Project URL</Label><Input placeholder="https://tu-proyecto.supabase.co" value={urlField} onChange={(e) => setUrlField(e.target.value)} /></div>
-            <div><Label>Anon Public Key</Label><Input placeholder="eyJhbGciOi..." value={keyField} onChange={(e) => setKeyField(e.target.value)} /></div>
-            <Btn onClick={saveConfig}><Icon name="database" size={15} /> Guardar Configuración</Btn>
+        <div><Label>Project URL de Supabase</Label><Input placeholder="https://tu-proyecto.supabase.co" value={urlField} onChange={(e) => setUrlField(e.target.value)} /></div>
+        <div><Label>Anon Public Key</Label><Input placeholder="eyJhbGciOi..." value={keyField} onChange={(e) => setKeyField(e.target.value)} /></div>
+        <div>
+          <Label>Código de Sincronización</Label>
+          <div className="flex gap-2">
+            <Input value={codeField} onChange={(e) => setCodeField(e.target.value.toUpperCase())} className="font-mono tracking-wider" />
+            <Btn variant="outline" size="icon" onClick={copyCode} title="Copiar código"><Icon name="copy" size={15} /></Btn>
+            <Btn variant="outline" size="icon" onClick={regenerate} title="Generar código nuevo"><Icon name="refresh-cw" size={15} /></Btn>
           </div>
-        ) : cloudUser ? (
+          <p className="text-[11px] text-slate-500 mt-1.5">Ingresá este mismo código en tu otro dispositivo (celular, PC) para que ambos compartan la misma información — sin login.</p>
+        </div>
+        <Btn onClick={saveConfig}><Icon name="database" size={15} /> Guardar y Conectar</Btn>
+
+        {cloudEnabled && (
           <div className="flex items-center justify-between rounded-lg border border-emerald-metallic/30 bg-emerald-metallic/10 p-4">
-            <div className="flex items-center gap-3"><Icon name="cloud" size={16} className="text-emerald-metallic" /><div><p className="text-sm text-slate-100">{cloudUser.email}</p><Badge variant="emerald" className="mt-1">Sincronizado</Badge></div></div>
-            <Btn variant="ghost" size="sm" onClick={signOut}><Icon name="log-out" size={14} /> Salir</Btn>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-sm text-slate-400">Iniciá sesión con tu email para sincronizar tus datos entre PC, tablet y móvil.</p>
-            <div className="flex gap-2"><Input type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} /><Btn onClick={doSignIn} disabled={sending}><Icon name="mail" size={15} /> {sending ? "Enviando..." : "Enviar Enlace"}</Btn></div>
-            <Btn variant="ghost" size="sm" onClick={() => setSupabaseConfig({ url: "", anonKey: "" })}>Cambiar credenciales</Btn>
+            <div className="flex items-center gap-3">
+              <Icon name="cloud" size={16} className="text-emerald-metallic" />
+              <div>
+                <p className="text-sm text-slate-100">Conectado con el código <span className="font-mono">{syncCode}</span></p>
+                <p className="text-[11px] text-slate-500">{lastSyncAt ? "Última sincronización: " + new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }).format(new Date(lastSyncAt)) : "Todavía no sincronizó"}</p>
+              </div>
+            </div>
+            <Btn variant="ghost" size="sm" onClick={syncNow} disabled={syncing}><Icon name="refresh-cw" size={14} className={syncing ? "animate-spin" : ""} /> {syncing ? "Sincronizando..." : "Sincronizar Ahora"}</Btn>
           </div>
         )}
+        <p className="text-[11px] text-slate-500">Ejecutá antes el <code className="text-champagne">schema.sql</code> provisto (con la columna <code className="text-champagne">device_code</code>) en tu proyecto de Supabase. Sin esto, la app funciona 100% offline con LocalStorage.</p>
       </CardContent>
     </Card>
   );
@@ -1984,6 +2327,7 @@ function AppShellRouter() {
       {page === "transactions" && <TransactionsPage />}
       {page === "budgets" && <BudgetsPage />}
       {page === "analytics" && <AnalyticsPage />}
+      {page === "copilot" && <AICopilotPage />}
       {page === "settings" && <SettingsPage />}
     </Shell>
   );
@@ -2001,6 +2345,25 @@ function App() {
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+<!-- PWA: registro del Service Worker para instalación y uso offline.
+     Nota técnica: los navegadores NO permiten registrar un Service Worker
+     desde una URL blob: o data: (protocolo no soportado por la spec), así
+     que se registra el archivo real "sw.js" que se entrega junto a este
+     index.html. Si el archivo no está presente (por ejemplo, en una vista
+     previa local) la app sigue funcionando normalmente, solo sin caché
+     offline ni instalación nativa en Android. -->
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("./sw.js").then(function (reg) {
+        console.log("Service Worker registrado:", reg.scope);
+      }).catch(function (err) {
+        console.warn("No se pudo registrar el Service Worker (¿falta sw.js junto a index.html?):", err.message);
+      });
+    });
+  }
 </script>
 </body>
 </html>
