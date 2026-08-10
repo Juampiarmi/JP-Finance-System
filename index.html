@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
 <title>JP Finance System — Seven Tangos</title>
-<meta name="description" content="Sistema ejecutivo de finanzas personales — patrimonio, presupuestos y analítica proyectiva de nivel banca privada." />
+<meta name="description" content="Control diario de tu plata en pesos: cuánto tenés en efectivo y billetera virtual, cuánto podés gastar hoy, y hacia dónde va tu dinero." />
 <meta name="theme-color" content="#090D16" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -21,7 +21,7 @@
   var manifest = {
     short_name: "Seven Tangos",
     name: "JP Finance System",
-    description: "Sistema ejecutivo de finanzas personales de nivel banca privada.",
+    description: "Control diario de tu plata en pesos: efectivo, billetera virtual y cuánto podés gastar hoy.",
     start_url: "./",
     id: "./",
     scope: "./",
@@ -137,10 +137,12 @@ function genSyncCode() {
   }
   return out;
 }
-function formatCurrency(value, currency = "USD", locale = "es-AR") {
-  return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
+function formatCurrency(value, currency = "ARS", locale = "es-AR") {
+  // En pesos (uso cotidiano) no mostramos centavos — números más simples de leer.
+  const decimals = currency === "ARS" ? 0 : 2;
+  return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value || 0);
 }
-function formatCompact(value, currency = "USD", locale = "es-AR") {
+function formatCompact(value, currency = "ARS", locale = "es-AR") {
   return new Intl.NumberFormat(locale, { style: "currency", currency, notation: "compact", maximumFractionDigits: 1 }).format(value || 0);
 }
 function formatPercent(value, decimals = 1) { return (value || 0).toFixed(decimals) + "%"; }
@@ -214,6 +216,42 @@ function computeProjectedCashFlow(transactions) {
     projectedIncome, projectedExpense, projectedCashFlow: projectedIncome - projectedExpense,
     daysRemaining: Math.max(totalDays - elapsedDays, 0), totalDays, elapsedDays,
   };
+}
+// Ordenador de Flujo de Dinero: separa lo que hay en la Billetera Virtual
+// entre lo que está libre para gastar, lo reservado para pagos fijos del mes
+// (servicios, alquiler y otros gastos recurrentes de "necesidades") y el
+// excedente que conviene mover o ahorrar en vez de dejarlo ocioso ahí.
+function computeWalletFlow(accounts, transactions, categories) {
+  const wallet = accounts.find((a) => a.type === "wallet");
+  const walletBalance = wallet ? wallet.balance : 0;
+  const fixedCategoryIds = new Set(categories.filter((c) => c.budgetGroup === "needs").map((c) => c.id));
+  const reserved = transactions
+    .filter((t) => t.isRecurring && t.recurrence && t.recurrence.active && fixedCategoryIds.has(t.categoryId))
+    .reduce((s, t) => s + t.amount, 0);
+  const freeToSpend = Math.max(walletBalance - reserved, 0);
+  const last3 = computeMonthlyTotals(transactions, lastNMonths(3));
+  const avgMonthlyExpense = (last3.reduce((s, m) => s + m.expense, 0) / 3) || 0;
+  const avgDailySpend = avgMonthlyExpense / 30;
+  const comfortableBuffer = avgDailySpend * 10; // ~10 días de gasto habitual como margen razonable
+  const idleSurplus = Math.max(freeToSpend - comfortableBuffer, 0);
+  return { walletBalance, reserved, freeToSpend, idleSurplus, comfortableBuffer, hasWallet: !!wallet };
+}
+// Límite de Gasto Diario Recomendado: cuánto se puede gastar hoy sin
+// comprometer los pagos fijos ya reservados, repartido entre los días que
+// quedan del mes — usando la plata líquida en Efectivo + Billetera Virtual.
+function computeDailySpendLimit(accounts, transactions, categories) {
+  const cash = accounts.find((a) => a.type === "cash");
+  const wallet = accounts.find((a) => a.type === "wallet");
+  const liquid = (cash ? cash.balance : 0) + (wallet ? wallet.balance : 0);
+  const flow = computeWalletFlow(accounts, transactions, categories);
+  const availableToSpend = Math.max(liquid - flow.reserved, 0);
+  const now = new Date();
+  const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysRemaining = Math.max(totalDays - now.getDate() + 1, 1);
+  const dailyLimit = availableToSpend / daysRemaining;
+  const todayStr = now.toISOString().slice(0, 10);
+  const spentToday = transactions.filter((t) => t.type === "expense" && t.date === todayStr).reduce((s, t) => s + t.amount, 0);
+  return { availableToSpend, daysRemaining, dailyLimit, spentToday, remainingToday: dailyLimit - spentToday };
 }
 // Motor de comparación histórica: gasto del mes actual, por categoría, contra
 // el promedio de los 3 meses anteriores.
@@ -379,14 +417,22 @@ const DEFAULT_CATEGORIES = [
   { id: "cat-other", name: "Otros", color: "#94A3B8", type: "expense", budgetGroup: "wants" },
 ];
 const DEFAULT_ACCOUNTS = [
-  { id: "acc-cash", name: "Efectivo", type: "cash", balance: 150, isAsset: true },
-  { id: "acc-wallet", name: "Mercado Pago", type: "wallet", balance: 3200, isAsset: true },
-  { id: "acc-checking", name: "Cuenta Corriente", type: "checking", balance: 8500, isAsset: true },
-  { id: "acc-savings", name: "Caja de Ahorro", type: "savings", balance: 22000, isAsset: true },
-  { id: "acc-investment", name: "Portafolio de Inversión", type: "investment", balance: 45000, isAsset: true },
-  { id: "acc-credit", name: "Tarjeta de Crédito", type: "credit", balance: 3200, isAsset: false },
+  { id: "acc-cash", name: "Efectivo", type: "cash", balance: 15000, isAsset: true },
+  { id: "acc-wallet", name: "Mercado Pago", type: "wallet", balance: 320000, isAsset: true },
+  { id: "acc-checking", name: "Cuenta Corriente", type: "checking", balance: 850000, isAsset: true },
+  { id: "acc-savings", name: "Caja de Ahorro", type: "savings", balance: 2200000, isAsset: true },
+  { id: "acc-investment", name: "Portafolio de Inversión", type: "investment", balance: 4500000, isAsset: true },
+  { id: "acc-credit", name: "Tarjeta de Crédito", type: "credit", balance: 320000, isAsset: false },
 ];
-const DEFAULT_PROFILE = { fullName: "Juampi", currency: "USD", locale: "es-AR", hideBalances: false };
+const DEFAULT_PROFILE = { fullName: "Juampi", currency: "ARS", locale: "es-AR", hideBalances: false };
+// Íconos táctiles para la Carga Exprès — asociamos cada categoría común a un
+// ícono de Lucide para que el registro rápido se sienta tipo calculadora.
+const CATEGORY_ICON_MAP = {
+  "Salario": "briefcase", "Freelance": "laptop", "Inversiones": "trending-up",
+  "Vivienda": "home", "Servicios": "zap", "Alimentación": "shopping-cart", "Transporte": "car",
+  "Salud": "activity", "Gastronomía": "utensils", "Entretenimiento": "film", "Compras": "shopping-bag",
+  "Viajes": "plane", "Suscripciones": "repeat", "Ahorro": "piggy-bank", "Inversión": "trending-up", "Otros": "more-horizontal",
+};
 const ACCOUNT_TYPE_LABEL = { cash: "Efectivo", wallet: "Billetera Virtual", checking: "Cuenta Corriente", savings: "Caja de Ahorro", investment: "Inversión", credit: "Tarjeta de Crédito", other: "Otro" };
 const GOAL_TYPE_LABEL = { savings: "Ahorro", investment: "Inversión", "debt-payoff": "Cancelación de Deuda", purchase: "Compra Mayor" };
 const FREQ_LABEL = { weekly: "Semanal", biweekly: "Quincenal", monthly: "Mensual", yearly: "Anual" };
@@ -398,31 +444,31 @@ function buildSeedTransactions() {
   const items = [];
   for (let m = 5; m >= 0; m--) {
     items.push(
-      { date: isoMonthsAgo(m, 1), description: "Salario Mensual", amount: 6200, type: "income", categoryId: "cat-salary", account: "Cuenta Corriente" },
-      { date: isoMonthsAgo(m, 15), description: "Proyecto Freelance", amount: 850, type: "income", categoryId: "cat-freelance", account: "Cuenta Corriente" },
-      { date: isoMonthsAgo(m, 3), description: "Alquiler", amount: 1800, type: "expense", categoryId: "cat-housing", account: "Cuenta Corriente" },
-      { date: isoMonthsAgo(m, 4), description: "Servicios (luz, gas, internet)", amount: 220, type: "expense", categoryId: "cat-utilities", account: "Cuenta Corriente" },
-      { date: isoMonthsAgo(m, 7), description: "Supermercado", amount: 480, type: "expense", categoryId: "cat-groceries", account: "Tarjeta de Crédito" },
-      { date: isoMonthsAgo(m, 9), description: "Combustible y transporte", amount: 160, type: "expense", categoryId: "cat-transport", account: "Cuenta Corriente" },
-      { date: isoMonthsAgo(m, 12), description: "Cena en restaurante", amount: 95, type: "expense", categoryId: "cat-dining", account: "Tarjeta de Crédito" },
-      { date: isoMonthsAgo(m, 18), description: "Streaming (Netflix, Spotify)", amount: 32, type: "expense", categoryId: "cat-subscriptions", account: "Tarjeta de Crédito", isRecurring: true, recurrence: { frequency: "monthly", nextDate: isoMonthsAgo(m - 1, 18), active: m === 0 } },
-      { date: isoMonthsAgo(m, 20), description: "Aporte a inversión", amount: 700, type: "expense", categoryId: "cat-investing", account: "Portafolio de Inversión" },
-      { date: isoMonthsAgo(m, 22), description: "Ahorro programado", amount: 400, type: "expense", categoryId: "cat-savings", account: "Caja de Ahorro" }
+      { date: isoMonthsAgo(m, 1), description: "Salario Mensual", amount: 620000, type: "income", categoryId: "cat-salary", account: "Cuenta Corriente" },
+      { date: isoMonthsAgo(m, 15), description: "Proyecto Freelance", amount: 85000, type: "income", categoryId: "cat-freelance", account: "Cuenta Corriente" },
+      { date: isoMonthsAgo(m, 3), description: "Alquiler", amount: 180000, type: "expense", categoryId: "cat-housing", account: "Cuenta Corriente" },
+      { date: isoMonthsAgo(m, 4), description: "Servicios (luz, gas, internet)", amount: 22000, type: "expense", categoryId: "cat-utilities", account: "Cuenta Corriente" },
+      { date: isoMonthsAgo(m, 7), description: "Supermercado", amount: 48000, type: "expense", categoryId: "cat-groceries", account: "Tarjeta de Crédito" },
+      { date: isoMonthsAgo(m, 9), description: "Combustible y transporte", amount: 16000, type: "expense", categoryId: "cat-transport", account: "Cuenta Corriente" },
+      { date: isoMonthsAgo(m, 12), description: "Cena en restaurante", amount: 9500, type: "expense", categoryId: "cat-dining", account: "Tarjeta de Crédito" },
+      { date: isoMonthsAgo(m, 18), description: "Streaming (Netflix, Spotify)", amount: 3200, type: "expense", categoryId: "cat-subscriptions", account: "Tarjeta de Crédito", isRecurring: true, recurrence: { frequency: "monthly", nextDate: isoMonthsAgo(m - 1, 18), active: m === 0 } },
+      { date: isoMonthsAgo(m, 20), description: "Aporte a inversión", amount: 70000, type: "expense", categoryId: "cat-investing", account: "Portafolio de Inversión" },
+      { date: isoMonthsAgo(m, 22), description: "Ahorro programado", amount: 40000, type: "expense", categoryId: "cat-savings", account: "Caja de Ahorro" }
     );
   }
   return items;
 }
 function buildSeedGoals() {
   return [
-    { name: "Fondo de Emergencia", type: "savings", targetAmount: 20000, currentAmount: 12500, color: "#3B82F6" },
-    { name: "Viaje a Europa", type: "purchase", targetAmount: 6000, currentAmount: 2100, color: "#D4AF7A" },
-    { name: "Portafolio de Inversión", type: "investment", targetAmount: 100000, currentAmount: 45000, color: "#10B981" },
+    { name: "Fondo de Emergencia", type: "savings", targetAmount: 2000000, currentAmount: 1250000, color: "#3B82F6" },
+    { name: "Viaje a Europa", type: "purchase", targetAmount: 600000, currentAmount: 210000, color: "#D4AF7A" },
+    { name: "Portafolio de Inversión", type: "investment", targetAmount: 10000000, currentAmount: 4500000, color: "#10B981" },
   ];
 }
 function buildSeedDebts() {
   return [
-    { name: "Tarjeta de Crédito", balance: 3200, originalBalance: 4500, interestRate: 65, minimumPayment: 200 },
-    { name: "Préstamo Personal", balance: 5400, originalBalance: 8000, interestRate: 38, minimumPayment: 280 },
+    { name: "Tarjeta de Crédito", balance: 320000, originalBalance: 450000, interestRate: 65, minimumPayment: 20000 },
+    { name: "Préstamo Personal", balance: 540000, originalBalance: 800000, interestRate: 38, minimumPayment: 28000 },
   ];
 }
 
@@ -627,6 +673,13 @@ function AppDataProvider({ children }) {
     const now = new Date().toISOString();
     const newTx = { ...t, id: uid(), createdAt: now, updatedAt: now };
     setTransactions((prev) => [newTx, ...prev]);
+    // Actualiza al instante el saldo de la caja de origen/destino elegida.
+    // accountId es un dato solo local: no se agrega a lo que se envía a
+    // Supabase (el payload de pushCloud de abajo queda intacto).
+    if (newTx.accountId) {
+      const sign = newTx.type === "income" ? 1 : -1;
+      setAccounts((prev) => prev.map((a) => a.id === newTx.accountId ? { ...a, balance: a.balance + sign * newTx.amount } : a));
+    }
     if (newTx.type !== "transfer") {
       pushCloud("transactions", { id: newTx.id, date: newTx.date, description: newTx.description, amount: newTx.amount, type: newTx.type, category_id: newTx.categoryId, account: newTx.account, notes: newTx.notes || null, is_recurring: newTx.isRecurring || false, recurrence: newTx.recurrence || null, created_at: newTx.createdAt, updated_at: newTx.updatedAt });
     }
@@ -652,12 +705,29 @@ function AppDataProvider({ children }) {
     if (tx.type === "transfer") {
       return addTransfer({ date: new Date().toISOString().slice(0, 10), fromAccountId: tx.fromAccountId, toAccountId: tx.toAccountId, amount: tx.amount, description: tx.description });
     }
-    return addTransaction({ date: new Date().toISOString().slice(0, 10), description: tx.description, amount: tx.amount, type: tx.type, categoryId: tx.categoryId, account: tx.account, notes: tx.notes, isRecurring: false, recurrence: undefined });
+    return addTransaction({ date: new Date().toISOString().slice(0, 10), description: tx.description, amount: tx.amount, type: tx.type, categoryId: tx.categoryId, account: tx.account, accountId: tx.accountId, notes: tx.notes, isRecurring: false, recurrence: undefined });
     // eslint-disable-next-line
   }, [transactions]);
   const updateTransaction = useCallback((id, t) => {
     const updatedAt = new Date().toISOString();
-    setTransactions((prev) => prev.map((tx) => tx.id === id ? { ...tx, ...t, updatedAt } : tx));
+    setTransactions((prev) => {
+      const old = prev.find((tx) => tx.id === id);
+      // Si cambia el monto, el tipo o la caja de una transacción ya cargada,
+      // revierte el efecto anterior sobre esa caja y aplica el nuevo — así
+      // el saldo de Efectivo/Billetera nunca queda desincronizado al editar.
+      if (old && old.type !== "transfer" && (old.accountId || t.accountId !== undefined)) {
+        const merged = { ...old, ...t };
+        const oldSign = old.type === "income" ? 1 : -1;
+        const newSign = merged.type === "income" ? 1 : -1;
+        setAccounts((accPrev) => accPrev.map((a) => {
+          let bal = a.balance;
+          if (old.accountId && a.id === old.accountId) bal -= oldSign * old.amount;
+          if (merged.accountId && a.id === merged.accountId) bal += newSign * merged.amount;
+          return bal !== a.balance ? { ...a, balance: bal } : a;
+        }));
+      }
+      return prev.map((tx) => tx.id === id ? { ...tx, ...t, updatedAt } : tx);
+    });
     pushCloud("transactions", { id, ...(t.date !== undefined && { date: t.date }), ...(t.description !== undefined && { description: t.description }), ...(t.amount !== undefined && { amount: t.amount }), ...(t.type !== undefined && { type: t.type }), ...(t.categoryId !== undefined && { category_id: t.categoryId }), ...(t.account !== undefined && { account: t.account }), ...(t.notes !== undefined && { notes: t.notes }), ...(t.recurrence !== undefined && { recurrence: t.recurrence }), updated_at: updatedAt });
   }, [pushCloud]);
   const deleteTransaction = useCallback((id) => {
@@ -670,6 +740,10 @@ function AppDataProvider({ children }) {
           if (a.id === tx.toAccountId) return { ...a, balance: a.balance - tx.amount };
           return a;
         }));
+      } else if (tx && tx.accountId) {
+        // Revierte el efecto que este gasto/ingreso tuvo sobre su caja.
+        const sign = tx.type === "income" ? 1 : -1;
+        setAccounts((accPrev) => accPrev.map((a) => a.id === tx.accountId ? { ...a, balance: a.balance - sign * tx.amount } : a));
       }
       return prev.filter((t) => t.id !== id);
     });
@@ -711,15 +785,23 @@ function AppDataProvider({ children }) {
 
   const addAccount = useCallback((a) => setAccounts((prev) => [...prev, { ...a, id: uid() }]), []);
   const deleteAccount = useCallback((id) => setAccounts((prev) => prev.filter((a) => a.id !== id)), []);
+  // Ajuste manual y directo del saldo de una caja (por ejemplo, para corregir
+  // el "Saldo Inicial" de Efectivo o Billetera Virtual desde el Dashboard).
+  const setAccountBalance = useCallback((id, balance) => setAccounts((prev) => prev.map((a) => a.id === id ? { ...a, balance } : a)), []);
 
-  // Vacía transacciones, cuentas, metas, deudas y presupuestos de prueba para
-  // que la persona pueda empezar con su información real. Mantiene el perfil,
-  // las categorías y la configuración de sincronización.
+  // Vacía transacciones, metas, deudas y presupuestos de prueba para que la
+  // persona pueda empezar con su información real. Mantiene el perfil, las
+  // categorías y la configuración de sincronización. Las cajas de Efectivo y
+  // Billetera Virtual no se eliminan del todo — vuelven a $0 — para que el
+  // Dashboard de uso diario siga funcionando apenas se cargan movimientos reales.
   const resetAllData = useCallback(() => {
     setTransactions([]);
     setGoals([]);
     setDebts([]);
-    setAccounts([]);
+    setAccounts([
+      { id: uid(), name: "Efectivo", type: "cash", balance: 0, isAsset: true },
+      { id: uid(), name: "Billetera Virtual", type: "wallet", balance: 0, isAsset: true },
+    ]);
     setBudgets([]);
   }, []);
 
@@ -768,7 +850,7 @@ function AppDataProvider({ children }) {
     cloudEnabled: !!cloudClient && !!syncCode,
     addTransaction, updateTransaction, deleteTransaction, bulkAddTransactions, addTransfer, duplicateTransaction,
     upsertBudget, deleteBudget, addGoal, updateGoal, deleteGoal, addDebt, deleteDebt,
-    addAccount, deleteAccount, resetAllData, updateProfile, toggleHideBalances,
+    addAccount, deleteAccount, setAccountBalance, resetAllData, updateProfile, toggleHideBalances,
     exportJSON, importJSON, exportCSV, importCSV,
   };
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
@@ -1054,6 +1136,112 @@ function AmountText({ value, currency }) {
   const formatted = formatCurrency(value, currency);
   return <span className="tabular-nums">{profile.hideBalances ? maskAmount(formatted) : formatted}</span>;
 }
+// Tarjeta de una caja líquida (Efectivo o Billetera Virtual) con edición
+// inline del saldo — sin abrir ninguna ventana ni panel superpuesto, el
+// campo de edición se expande dentro de la misma tarjeta.
+function CashBoxCard({ acc, icon, missingLabel, missingType, onCreate }) {
+  const { setAccountBalance, profile } = useApp();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const startEdit = () => { setValue(acc ? String(acc.balance) : "0"); setEditing(true); };
+  const save = () => { const v = parseFloat(value); if (!isNaN(v) && acc) setAccountBalance(acc.id, v); setEditing(false); };
+  return (
+    <div className="rounded-xl border border-slate-800/70 bg-slate-900/40 p-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2 text-sm text-slate-300"><Icon name={icon} size={16} />{acc ? acc.name : missingLabel}</div>
+        {acc && !editing && <button onClick={startEdit} title="Ajustar saldo" className="text-slate-500 hover:text-champagne"><Icon name="pencil" size={13} /></button>}
+      </div>
+      {!acc ? (
+        <button onClick={() => onCreate(missingType)} className="text-xs text-champagne underline underline-offset-2">Crear esta caja</button>
+      ) : editing ? (
+        <div className="flex items-center gap-2">
+          <Input autoFocus type="number" value={value} onChange={(e) => setValue(e.target.value)} className="h-9 text-lg font-semibold" />
+          <Btn size="icon-sm" onClick={save} title="Guardar"><Icon name="check-circle-2" size={15} /></Btn>
+          <Btn size="icon-sm" variant="ghost" onClick={() => setEditing(false)} title="Cancelar"><Icon name="x" size={15} /></Btn>
+        </div>
+      ) : (
+        <div className="text-2xl font-semibold font-display tabular-nums text-slate-100"><AmountText value={acc.balance} currency={profile.currency} /></div>
+      )}
+    </div>
+  );
+}
+// Widget principal del Dashboard: responde de inmediato "¿cuánta plata me
+// queda en el bolsillo y en la billetera virtual hoy?" — con el total
+// consolidado arriba y el desglose de cada caja, editable en el momento.
+function CashBoxToday() {
+  const { accounts, profile, addAccount } = useApp();
+  const cash = accounts.find((a) => a.type === "cash");
+  const wallet = accounts.find((a) => a.type === "wallet");
+  const total = (cash ? cash.balance : 0) + (wallet ? wallet.balance : 0);
+  const createBox = (type) => addAccount({ name: type === "cash" ? "Efectivo" : "Billetera Virtual", type, balance: 0, isAsset: true });
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Dinero en Caja Hoy</p>
+        <div className="text-4xl font-semibold font-display text-gradient-champagne mb-5"><AmountText value={total} currency={profile.currency} /></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <CashBoxCard acc={cash} icon="banknote" missingLabel="💵 Efectivo" missingType="cash" onCreate={createBox} />
+          <CashBoxCard acc={wallet} icon="smartphone" missingLabel="📱 Billetera Virtual" missingType="wallet" onCreate={createBox} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+// Ordenador de Flujo de Dinero: cómo conviene repartir la plata de la
+// Billetera Virtual entre lo libre para gastar, lo reservado para pagos
+// fijos y el excedente ocioso que conviene mover o ahorrar.
+function WalletFlowCard() {
+  const { accounts, transactions, categories, profile } = useApp();
+  const flow = useMemo(() => computeWalletFlow(accounts, transactions, categories), [accounts, transactions, categories]);
+  if (!flow.hasWallet) return null;
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2"><Icon name="sliders-horizontal" size={15} className="text-champagne" /><CardTitle className="!text-slate-300">Ordenador de tu Billetera Virtual</CardTitle></div>
+        <CardDescription>Cómo conviene repartir la plata que tenés ahí</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-center justify-between rounded-lg border border-emerald-metallic/25 bg-emerald-metallic/10 px-4 py-3">
+          <div><p className="text-sm text-slate-100">Dinero Libre para Gastar</p><p className="text-[11px] text-slate-500">Después de separar los pagos fijos</p></div>
+          <span className="text-sm font-semibold tabular-nums text-emerald-metallic shrink-0 pl-2"><AmountText value={flow.freeToSpend} currency={profile.currency} /></span>
+        </div>
+        <div className="flex items-center justify-between rounded-lg border border-cobalt/25 bg-cobalt/10 px-4 py-3">
+          <div><p className="text-sm text-slate-100">Reservado para Pagos Fijos</p><p className="text-[11px] text-slate-500">Servicios, alquiler y otros recurrentes activos</p></div>
+          <span className="text-sm font-semibold tabular-nums text-cobalt shrink-0 pl-2"><AmountText value={flow.reserved} currency={profile.currency} /></span>
+        </div>
+        {flow.idleSurplus > 0 && (
+          <div className="flex items-center justify-between rounded-lg border border-champagne/30 bg-champagne/10 px-4 py-3">
+            <div className="flex items-start gap-2 min-w-0">
+              <Icon name="alert-triangle" size={15} className="text-champagne mt-0.5 shrink-0" />
+              <div className="min-w-0"><p className="text-sm text-slate-100">Excedente para Mover / Ahorrar</p><p className="text-[11px] text-slate-500">Plata ociosa en la billetera — considerá moverla a ahorro o inversión</p></div>
+            </div>
+            <span className="text-sm font-semibold tabular-nums text-champagne shrink-0 pl-2"><AmountText value={flow.idleSurplus} currency={profile.currency} /></span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+// Cuánto se puede gastar hoy sin comprometer los pagos fijos ya reservados.
+function DailySpendLimitWidget() {
+  const { accounts, transactions, categories, profile } = useApp();
+  const d = useMemo(() => computeDailySpendLimit(accounts, transactions, categories), [accounts, transactions, categories]);
+  const positive = d.remainingToday >= 0;
+  return (
+    <Card className="relative overflow-hidden">
+      <div className={cx("absolute -right-8 -top-8 h-24 w-24 rounded-full blur-2xl opacity-20", positive ? "bg-emerald-metallic" : "bg-crimson-elegant")}></div>
+      <CardContent className="p-6 relative">
+        <div className="flex items-center justify-between mb-2"><span className="text-xs font-medium text-slate-500 uppercase tracking-wider">¿Cuánto puedo gastar hoy?</span><Icon name="gauge" size={16} className={positive ? "text-emerald-metallic" : "text-crimson-elegant"} /></div>
+        <div className="text-4xl font-semibold font-display text-slate-100"><AmountText value={d.dailyLimit} currency={profile.currency} /></div>
+        <p className="text-[11px] text-slate-500 mt-1.5">Repartiendo lo disponible en Efectivo y Billetera entre los {d.daysRemaining} días que quedan del mes</p>
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-800/70">
+          <div><p className="text-[11px] text-slate-500 uppercase tracking-wider">Gastado Hoy</p><p className="text-sm font-medium tabular-nums text-slate-100"><AmountText value={d.spentToday} currency={profile.currency} /></p></div>
+          <div className="text-right"><p className="text-[11px] text-slate-500 uppercase tracking-wider">Te Queda Hoy</p><p className={cx("text-sm font-medium tabular-nums", positive ? "text-emerald-metallic" : "text-crimson-elegant")}><AmountText value={d.remainingToday} currency={profile.currency} /></p></div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 function KpiCards() {
   const { transactions, accounts, profile } = useApp();
   const kpis = useMemo(() => computeKPIs(transactions, accounts), [transactions, accounts]);
@@ -1280,10 +1468,11 @@ function QuickActionsPanel() {
         {topExpenseCats.length > 0 && (
           <div className="mt-4 pt-4 border-t border-slate-800/70">
             <p className="text-[11px] text-slate-500 uppercase tracking-wider mb-2">Un toque para cargar un gasto común</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
               {topExpenseCats.map((c) => (
-                <button key={c.id} onClick={() => openMovement("expense", c.id)} className="inline-flex items-center gap-1.5 rounded-full border border-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-700 transition-colors">
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: c.color }}></span>{c.name}
+                <button key={c.id} onClick={() => openMovement("expense", c.id)} className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-800 py-3 text-[11px] font-medium text-slate-300 hover:border-slate-700 transition-colors">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: c.color + "1A", color: c.color }}><Icon name={CATEGORY_ICON_MAP[c.name] || "tag"} size={17} /></div>
+                  <span className="truncate max-w-full">{c.name}</span>
                 </button>
               ))}
             </div>
@@ -1302,16 +1491,25 @@ function MovementPanel() {
 
   const [categoryId, setCategoryId] = useState("");
   const [amount, setAmount] = useState("");
-  const [account, setAccount] = useState("");
+  const [accountId, setAccountId] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [fromId, setFromId] = useState("");
   const [toId, setToId] = useState("");
+  const [showOtherAccounts, setShowOtherAccounts] = useState(false);
+
+  // Las dos cajas de uso diario — el resto de las cuentas (bancos, inversión,
+  // tarjeta) queda disponible como "otra cuenta" sin competir visualmente
+  // con la carga rápida de todos los días.
+  const dailyBoxes = useMemo(() => accounts.filter((a) => a.type === "cash" || a.type === "wallet"), [accounts]);
+  const otherAccounts = useMemo(() => accounts.filter((a) => a.type !== "cash" && a.type !== "wallet"), [accounts]);
 
   useEffect(() => {
     if (!open) return;
     setCategoryId((movement && movement.categoryId) || ""); setAmount(""); setDescription("");
-    setAccount((accounts[0] || {}).name || "");
+    const preferred = dailyBoxes.find((a) => a.type === "wallet") || dailyBoxes[0] || accounts[0];
+    setAccountId(preferred ? preferred.id : "");
+    setShowOtherAccounts(false);
     setFromId((accounts[0] || {}).id || ""); setToId((accounts[1] || {}).id || "");
     setDate(new Date().toISOString().slice(0, 10));
     // eslint-disable-next-line
@@ -1319,6 +1517,7 @@ function MovementPanel() {
 
   const chips = useMemo(() => type === "transfer" ? [] : mostUsedCategories(transactions, categories, type), [transactions, categories, type]);
   const selectedCategory = categories.find((c) => c.id === categoryId);
+  const selectedAccount = accounts.find((a) => a.id === accountId);
 
   const submit = () => {
     const amt = parseFloat(amount);
@@ -1330,8 +1529,9 @@ function MovementPanel() {
       toast({ title: "Transferencia realizada", description: (fromAcc ? fromAcc.name : "") + " → " + (toAcc ? toAcc.name : ""), variant: "success" });
     } else {
       if (!categoryId) return toast({ title: "Elegí una categoría", variant: "error" });
-      addTransaction({ date, description: description.trim() || (selectedCategory ? selectedCategory.name : ""), amount: amt, type, categoryId, account });
-      toast({ title: type === "income" ? "Ingreso registrado" : "Gasto registrado", description: formatCurrency(amt, profile.currency), variant: "success" });
+      if (!accountId) return toast({ title: "Elegí de qué caja sale o entra la plata", variant: "error" });
+      addTransaction({ date, description: description.trim() || (selectedCategory ? selectedCategory.name : ""), amount: amt, type, categoryId, account: selectedAccount ? selectedAccount.name : "", accountId });
+      toast({ title: type === "income" ? "Ingreso registrado" : "Gasto registrado", description: (selectedAccount ? selectedAccount.name + " · " : "") + formatCurrency(amt, profile.currency), variant: "success" });
     }
     closeMovement();
   };
@@ -1341,7 +1541,7 @@ function MovementPanel() {
   const TONES = { income: "emerald", expense: "crimson", transfer: "cobalt" };
 
   return (
-    <Panel open={open} onClose={closeMovement} title={TITLES[type]} description="Dos toques y listo — no hace falta completar todo." tone={TONES[type]}>
+    <Panel open={open} onClose={closeMovement} title={TITLES[type]} description="Monto, categoría y caja — nada más." tone={TONES[type]}>
       <div className="space-y-4">
         <div className="grid grid-cols-3 gap-2">
           <button onClick={() => openMovement("income")} className={cx("rounded-lg border py-2 text-xs font-semibold transition-colors", type === "income" ? "border-emerald-metallic/60 bg-emerald-metallic/15 text-emerald-metallic" : "border-slate-800 text-slate-500 hover:border-slate-700")}>+ Ingreso</button>
@@ -1351,13 +1551,19 @@ function MovementPanel() {
 
         {type !== "transfer" ? (
           <>
+            <div className="text-center py-1">
+              <Label className="!mb-2 !text-center">Monto</Label>
+              <Input autoFocus type="number" step="0.01" min="0" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-4xl h-20 text-center font-display font-semibold" />
+            </div>
+
             {chips.length > 0 && (
               <div>
-                <Label>Categorías frecuentes</Label>
-                <div className="flex flex-wrap gap-2">
+                <Label>Categoría rápida</Label>
+                <div className="grid grid-cols-3 gap-2">
                   {chips.map((c) => (
-                    <button key={c.id} onClick={() => setCategoryId(c.id)} className={cx("inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors", categoryId === c.id ? "border-transparent" : "border-slate-800 text-slate-400 hover:border-slate-700")} style={categoryId === c.id ? { backgroundColor: c.color + "26", color: c.color, borderColor: c.color + "80" } : {}}>
-                      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: c.color }}></span>{c.name}
+                    <button key={c.id} onClick={() => setCategoryId(c.id)} className={cx("flex flex-col items-center justify-center gap-1 rounded-xl border py-3 text-[11px] font-medium transition-colors", categoryId === c.id ? "border-transparent" : "border-slate-800 text-slate-400 hover:border-slate-700")} style={categoryId === c.id ? { backgroundColor: c.color + "26", color: c.color, borderColor: c.color + "80" } : {}}>
+                      <Icon name={CATEGORY_ICON_MAP[c.name] || "tag"} size={18} />
+                      <span className="truncate max-w-full">{c.name}</span>
                     </button>
                   ))}
                 </div>
@@ -1367,12 +1573,30 @@ function MovementPanel() {
               <Label>Categoría</Label>
               <Select value={categoryId} onChange={setCategoryId}><option value="">Elegir categoría</option>{categories.filter((c) => c.type === type).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
             </div>
-            <div><Label>Monto</Label><Input autoFocus type="number" step="0.01" min="0" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-2xl h-14 font-display font-semibold" /></div>
+
+            <div>
+              <Label>Caja de salida / entrada</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {dailyBoxes.map((a) => (
+                  <button key={a.id} onClick={() => setAccountId(a.id)} className={cx("flex items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold transition-colors", accountId === a.id ? "border-champagne bg-champagne/15 text-champagne" : "border-slate-800 text-slate-400 hover:border-slate-700")}>
+                    <Icon name={a.type === "cash" ? "banknote" : "smartphone"} size={17} /> {a.name}
+                  </button>
+                ))}
+              </div>
+              {otherAccounts.length > 0 && (
+                <button type="button" onClick={() => setShowOtherAccounts((s) => !s)} className="text-xs text-slate-500 hover:text-champagne underline underline-offset-2 mt-2">
+                  {showOtherAccounts ? "Ocultar otras cuentas" : "Usar otra cuenta (banco, inversión, tarjeta)"}
+                </button>
+              )}
+              {showOtherAccounts && (
+                <div className="mt-2"><Select value={accountId} onChange={setAccountId}><option value="">Elegir cuenta</option>{otherAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select></div>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Fecha</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-              <div><Label>Fondo</Label><Select value={account} onChange={setAccount}>{accounts.map((a) => <option key={a.id} value={a.name}>{a.name}</option>)}</Select></div>
+              <div><Label>Descripción (opcional)</Label><Input placeholder={selectedCategory ? selectedCategory.name : "..."} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
             </div>
-            <div><Label>Descripción (opcional)</Label><Input placeholder={selectedCategory ? selectedCategory.name : "Se usa el nombre de la categoría"} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
             <button onClick={openFullForm} className="text-xs text-slate-500 hover:text-champagne underline underline-offset-2">Cargar con más detalles (recurrencia, notas)</button>
           </>
         ) : (
@@ -1503,21 +1727,20 @@ function DailySpendFilter() {
     </Card>
   );
 }
+// Dashboard de uso cotidiano: responde de inmediato a "¿cuánta plata me
+// queda en el bolsillo y en la billetera hoy?" y "¿cuánto puedo gastar hoy?".
+// Los gráficos complejos y las proyecciones a largo plazo viven en la
+// pestaña secundaria "Patrimonio" (ver AnalyticsPage → tab "Panorama").
 function DashboardPage() {
   return (
     <div className="space-y-6 animate-fade-in">
+      <CashBoxToday />
+      <DailySpendLimitWidget />
       <QuickActionsPanel />
       <MovementPanel />
+      <WalletFlowCard />
       <DailySpendFilter />
-      <KpiCards />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <EmergencyRunwayWidget />
-        <ProjectedCashFlowWidget />
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6"><IncomeExpenseChart /><RecentTransactions /></div>
-        <div className="space-y-6"><FundsOverview /><ExpenseDonut /></div>
-      </div>
+      <RecentTransactions />
     </div>
   );
 }
@@ -1547,24 +1770,25 @@ function nextOccurrence(dateISO, frequency) {
 function TransactionFormModal({ open, onClose, editing }) {
   const { categories, accounts, addTransaction, updateTransaction } = useApp();
   const { toast } = useToast();
-  const empty = { date: new Date().toISOString().slice(0, 10), description: "", amount: "", type: "expense", categoryId: "", account: "", notes: "", isRecurring: false, frequency: "monthly" };
+  const empty = { date: new Date().toISOString().slice(0, 10), description: "", amount: "", type: "expense", categoryId: "", accountId: "", notes: "", isRecurring: false, frequency: "monthly" };
   const [form, setForm] = useState(empty);
   useEffect(() => {
     if (editing) {
-      setForm({ date: editing.date.slice(0, 10), description: editing.description, amount: String(editing.amount), type: editing.type, categoryId: editing.categoryId, account: editing.account, notes: editing.notes || "", isRecurring: !!editing.isRecurring, frequency: (editing.recurrence && editing.recurrence.frequency) || "monthly" });
+      setForm({ date: editing.date.slice(0, 10), description: editing.description, amount: String(editing.amount), type: editing.type, categoryId: editing.categoryId, accountId: editing.accountId || (accounts.find((a) => a.name === editing.account) || {}).id || "", notes: editing.notes || "", isRecurring: !!editing.isRecurring, frequency: (editing.recurrence && editing.recurrence.frequency) || "monthly" });
     } else if (open) {
-      setForm({ ...empty, categoryId: (categories.find((c) => c.type === "expense") || {}).id || "", account: (accounts[0] || {}).name || "" });
+      setForm({ ...empty, categoryId: (categories.find((c) => c.type === "expense") || {}).id || "", accountId: (accounts[0] || {}).id || "" });
     }
     // eslint-disable-next-line
   }, [editing, open]);
   const filteredCategories = categories.filter((c) => c.type === form.type);
+  const selectedAccount = accounts.find((a) => a.id === form.accountId);
   const submit = (e) => {
     e.preventDefault();
     const amount = parseFloat(form.amount);
     if (!form.description.trim()) return toast({ title: "Falta la descripción", variant: "error" });
     if (isNaN(amount) || amount <= 0) return toast({ title: "El monto debe ser mayor a cero", variant: "error" });
     if (!form.categoryId) return toast({ title: "Seleccioná una categoría", variant: "error" });
-    const payload = { date: form.date, description: form.description.trim(), amount, type: form.type, categoryId: form.categoryId, account: form.account, notes: form.notes.trim() || undefined, isRecurring: form.isRecurring, recurrence: form.isRecurring ? { frequency: form.frequency, nextDate: nextOccurrence(form.date, form.frequency), active: true } : undefined };
+    const payload = { date: form.date, description: form.description.trim(), amount, type: form.type, categoryId: form.categoryId, account: selectedAccount ? selectedAccount.name : "", accountId: form.accountId || undefined, notes: form.notes.trim() || undefined, isRecurring: form.isRecurring, recurrence: form.isRecurring ? { frequency: form.frequency, nextDate: nextOccurrence(form.date, form.frequency), active: true } : undefined };
     if (editing) { updateTransaction(editing.id, payload); toast({ title: "Transacción actualizada", variant: "success" }); }
     else { addTransaction(payload); toast({ title: "Transacción registrada", variant: "success" }); }
     onClose();
@@ -1583,7 +1807,7 @@ function TransactionFormModal({ open, onClose, editing }) {
         <div><Label>Descripción</Label><Input placeholder="Ej: Supermercado, Salario..." value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} required /></div>
         <div className="grid grid-cols-2 gap-3">
           <div><Label>Categoría</Label><Select value={form.categoryId} onChange={(v) => setForm((f) => ({ ...f, categoryId: v }))}><option value="">Elegir...</option>{filteredCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></div>
-          <div><Label>Cuenta</Label><Select value={form.account} onChange={(v) => setForm((f) => ({ ...f, account: v }))}><option value="">Elegir...</option>{accounts.map((a) => <option key={a.id} value={a.name}>{a.name}</option>)}</Select></div>
+          <div><Label>Cuenta</Label><Select value={form.accountId} onChange={(v) => setForm((f) => ({ ...f, accountId: v }))}><option value="">Elegir...</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select></div>
         </div>
         <div><Label>Notas (opcional)</Label><Textarea placeholder="Detalles adicionales..." value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} /></div>
         <div className="flex items-center justify-between rounded-lg border border-slate-800 px-4 py-3">
@@ -1890,7 +2114,7 @@ function BudgetsPage() {
    ============================================================================ */
 function CompoundInterestCalculator() {
   const { profile } = useApp();
-  const [initial, setInitial] = useState("10000"); const [monthly, setMonthly] = useState("500"); const [rate, setRate] = useState("8");
+  const [initial, setInitial] = useState("1000000"); const [monthly, setMonthly] = useState("50000"); const [rate, setRate] = useState("8");
   const series = useMemo(() => computeCompoundInterest({ initial: parseFloat(initial) || 0, monthlyContribution: parseFloat(monthly) || 0, annualRatePercent: parseFloat(rate) || 0, years: 20 }), [initial, monthly, rate]);
   const milestones = [5, 10, 20].map((y) => series.find((p) => p.year === y));
   return (
@@ -2030,13 +2254,31 @@ function GoalsTracker() {
     </Card>
   );
 }
+// Panorama: acá viven los gráficos y KPIs "de largo plazo" que antes
+// estaban en el Dashboard — se movieron a esta pestaña secundaria para que
+// la pantalla principal quede enfocada en el uso del día a día.
+function PanoramaTab() {
+  return (
+    <div className="space-y-6">
+      <KpiCards />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <EmergencyRunwayWidget />
+        <ProjectedCashFlowWidget />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6"><IncomeExpenseChart /></div>
+        <div className="space-y-6"><FundsOverview /><ExpenseDonut /></div>
+      </div>
+    </div>
+  );
+}
 function AnalyticsPage() {
-  const [tab, setTab] = useState("wealth");
+  const [tab, setTab] = useState("panorama");
   return (
     <div className="space-y-6 animate-fade-in">
       <div><h2 className="text-xl font-semibold font-display text-slate-100">Analítica Proyectiva &amp; Patrimonio</h2><p className="text-sm text-slate-500">Proyectá tu riqueza futura y diseñá tu estrategia de libertad financiera.</p></div>
-      <Tabs tabs={[{ value: "wealth", label: "Interés Compuesto" }, { value: "debt", label: "Deudas" }, { value: "goals", label: "Metas" }]} value={tab} onChange={setTab} />
-      <div className="mt-4">{tab === "wealth" && <CompoundInterestCalculator />}{tab === "debt" && <DebtManager />}{tab === "goals" && <GoalsTracker />}</div>
+      <Tabs tabs={[{ value: "panorama", label: "Panorama" }, { value: "wealth", label: "Interés Compuesto" }, { value: "debt", label: "Deudas" }, { value: "goals", label: "Metas" }]} value={tab} onChange={setTab} />
+      <div className="mt-4">{tab === "panorama" && <PanoramaTab />}{tab === "wealth" && <CompoundInterestCalculator />}{tab === "debt" && <DebtManager />}{tab === "goals" && <GoalsTracker />}</div>
     </div>
   );
 }
@@ -2155,7 +2397,7 @@ function AICopilotPage() {
 const SQL_SCHEMA = "-- Ver schema.sql entregado junto a este archivo.\\n-- Tablas: transactions, budgets, goals — todas filtradas por la columna\\n-- device_code (texto libre) en vez de un user_id de Supabase Auth.";
 function ProfileCard() {
   const { profile, updateProfile } = useApp();
-  const CURRENCIES = ["USD", "EUR", "ARS", "GBP", "CHF"];
+  const CURRENCIES = ["ARS", "USD", "EUR", "GBP", "CHF"];
   return (
     <Card>
       <CardHeader><CardTitle>Perfil</CardTitle><CardDescription>Preferencias personales y de privacidad</CardDescription></CardHeader>
@@ -2277,7 +2519,7 @@ function DataResetCard() {
           <Btn variant="destructive" onClick={() => setConfirming(true)}><Icon name="trash-2" size={16} /> Vaciar Datos de Prueba y Empezar de Cero</Btn>
         ) : (
           <div className="rounded-lg border border-crimson-elegant/40 bg-crimson-elegant/10 p-4 space-y-3 animate-fade-in">
-            <p className="text-sm text-slate-100">¿Seguro? Se van a borrar todas las transacciones, cuentas, metas y deudas guardadas. Esta acción no se puede deshacer.</p>
+            <p className="text-sm text-slate-100">¿Seguro? Se van a borrar todas las transacciones, metas y deudas guardadas, y tus cajas de Efectivo y Billetera Virtual vuelven a $0. Esta acción no se puede deshacer.</p>
             <div className="flex gap-2">
               <Btn variant="ghost" size="sm" onClick={() => setConfirming(false)}>Cancelar</Btn>
               <Btn variant="destructive" size="sm" onClick={doReset}><Icon name="trash-2" size={14} /> Sí, borrar todo</Btn>
