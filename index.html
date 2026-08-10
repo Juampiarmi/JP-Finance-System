@@ -253,6 +253,69 @@ function computeDailySpendLimit(accounts, transactions, categories) {
   const spentToday = transactions.filter((t) => t.type === "expense" && t.date === todayStr).reduce((s, t) => s + t.amount, 0);
   return { availableToSpend, daysRemaining, dailyLimit, spentToday, remainingToday: dailyLimit - spentToday };
 }
+// Genera el calendario de cuotas de una compra (fecha de cada cuota, una por
+// mes desde la primera cuota).
+function installmentSchedule(p) {
+  const items = [];
+  const start = new Date(p.startDate);
+  for (let i = 0; i < p.installmentsCount; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth() + i, start.getDate());
+    items.push({ index: i + 1, date: d.toISOString().slice(0, 10) });
+  }
+  return items;
+}
+// Próximos Vencimientos: junta los pagos fijos recurrentes activos y las
+// cuotas pendientes que caen dentro de la ventana de días indicada, para
+// poder calcular el "Saldo 100% Libre" (plata líquida menos lo que ya sabés
+// que se va).
+function computeUpcomingDue(transactions, installments, daysAhead = 15) {
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const limitDate = new Date(now); limitDate.setDate(limitDate.getDate() + daysAhead);
+  const limitStr = limitDate.toISOString().slice(0, 10);
+  const items = [];
+  transactions.filter((t) => t.isRecurring && t.recurrence && t.recurrence.active).forEach((t) => {
+    const due = t.recurrence.nextDate;
+    if (due >= todayStr && due <= limitStr) items.push({ id: t.id + "-rec", description: t.description, amount: t.amount, date: due, kind: "recurrente" });
+  });
+  (installments || []).forEach((p) => {
+    installmentSchedule(p).forEach((s) => {
+      if (s.date >= todayStr && s.date <= limitStr) items.push({ id: p.id + "-" + s.index, description: p.description + " (cuota " + s.index + "/" + p.installmentsCount + ")", amount: p.installmentAmount, date: s.date, kind: "cuota" });
+    });
+  });
+  items.sort((a, b) => a.date.localeCompare(b.date));
+  const total = items.reduce((s, i) => s + i.amount, 0);
+  return { items, total };
+}
+// Estrategia de Cierre de Mes: según la proyección de fin de mes, recomienda
+// cuánto destinar a Ahorro/Inversión (si sobra) o en qué categoría de
+// "deseos" conviene recortar (si falta) para no cerrar en rojo.
+function computeMonthClosingStrategy(transactions, categories) {
+  const projection = computeProjectedCashFlow(transactions);
+  const last3 = computeMonthlyTotals(transactions, lastNMonths(3));
+  const avgMonthlyExpense = (last3.reduce((s, m) => s + m.expense, 0) / 3) || projection.expense || 0;
+  const surplus = projection.projectedCashFlow;
+  let recommendation;
+  if (surplus > 0) {
+    const toSave = Math.round(surplus * 0.6);
+    recommendation = { kind: "surplus", toSave, toKeep: surplus - toSave, surplus };
+  } else if (surplus < 0) {
+    const cm = monthKey(new Date().toISOString());
+    const monthExp = transactions.filter((t) => t.type === "expense" && monthKey(t.date) === cm);
+    const byCat = new Map();
+    monthExp.forEach((t) => {
+      const cat = categories.find((c) => c.id === t.categoryId);
+      if (cat && cat.budgetGroup === "wants") byCat.set(cat.id, (byCat.get(cat.id) || 0) + t.amount);
+    });
+    let worst = null;
+    byCat.forEach((amount, cid) => { if (!worst || amount > worst.amount) worst = { cid, amount }; });
+    const worstCategory = worst ? categories.find((c) => c.id === worst.cid) : null;
+    recommendation = { kind: "deficit", deficit: Math.abs(surplus), worstCategory, worstCategoryAmount: worst ? worst.amount : 0 };
+  } else {
+    recommendation = { kind: "even" };
+  }
+  return { avgMonthlyExpense, projection, recommendation };
+}
 // Motor de comparación histórica: gasto del mes actual, por categoría, contra
 // el promedio de los 3 meses anteriores.
 function computeMonthlyComparison(transactions, categories) {
@@ -424,7 +487,7 @@ const DEFAULT_ACCOUNTS = [
   { id: "acc-investment", name: "Portafolio de Inversión", type: "investment", balance: 4500000, isAsset: true },
   { id: "acc-credit", name: "Tarjeta de Crédito", type: "credit", balance: 320000, isAsset: false },
 ];
-const DEFAULT_PROFILE = { fullName: "Juampi", currency: "ARS", locale: "es-AR", hideBalances: false };
+const DEFAULT_PROFILE = { fullName: "Juampi", currency: "ARS", locale: "es-AR", hideBalances: false, fixedSalaryAmount: 620000, fixedSalaryDay: 1 };
 // Íconos táctiles para la Carga Exprès — asociamos cada categoría común a un
 // ícono de Lucide para que el registro rápido se sienta tipo calculadora.
 const CATEGORY_ICON_MAP = {
@@ -479,6 +542,7 @@ const KEYS = {
   transactions: "jpfs:transactions", categories: "jpfs:categories", budgets: "jpfs:budgets",
   goals: "jpfs:goals", debts: "jpfs:debts", accounts: "jpfs:accounts", profile: "jpfs:profile",
   supabaseConfig: "jpfs:supabase-config", seeded: "jpfs:seeded", syncCode: "jpfs:sync-code",
+  installments: "jpfs:installments",
 };
 function loadLocal(key, fallback) {
   try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch (e) { return fallback; }
@@ -578,6 +642,9 @@ function AppDataProvider({ children }) {
     return withSeed(KEYS.debts, () => buildSeedDebts().map((d) => ({ ...d, id: uid(), createdAt: now })));
   });
   const [accounts, setAccounts] = useState(() => loadLocal(KEYS.accounts, DEFAULT_ACCOUNTS));
+  // Compras en cuotas (3/6/12 cuotas) — igual que las deudas, es un dato solo
+  // local: no se sincroniza a Supabase, así que no toca la nube en absoluto.
+  const [installments, setInstallments] = useState(() => loadLocal(KEYS.installments, []));
   const [profile, setProfile] = useState(() => loadLocal(KEYS.profile, DEFAULT_PROFILE));
   const [supabaseConfig, setSupabaseConfig] = useState(() => loadLocal(KEYS.supabaseConfig, { url: "", anonKey: "" }));
   // Sincronización directa por código de dispositivo: SIN email, SIN magic
@@ -610,6 +677,7 @@ function AppDataProvider({ children }) {
   useEffect(() => saveLocal(KEYS.goals, goals), [goals]);
   useEffect(() => saveLocal(KEYS.debts, debts), [debts]);
   useEffect(() => saveLocal(KEYS.accounts, accounts), [accounts]);
+  useEffect(() => saveLocal(KEYS.installments, installments), [installments]);
   useEffect(() => saveLocal(KEYS.profile, profile), [profile]);
   useEffect(() => saveLocal(KEYS.supabaseConfig, supabaseConfig), [supabaseConfig]);
 
@@ -783,6 +851,9 @@ function AppDataProvider({ children }) {
   const addDebt = useCallback((d) => setDebts((prev) => [...prev, { ...d, id: uid(), createdAt: new Date().toISOString() }]), []);
   const deleteDebt = useCallback((id) => setDebts((prev) => prev.filter((d) => d.id !== id)), []);
 
+  const addInstallment = useCallback((p) => setInstallments((prev) => [...prev, { ...p, id: uid(), createdAt: new Date().toISOString() }]), []);
+  const deleteInstallment = useCallback((id) => setInstallments((prev) => prev.filter((p) => p.id !== id)), []);
+
   const addAccount = useCallback((a) => setAccounts((prev) => [...prev, { ...a, id: uid() }]), []);
   const deleteAccount = useCallback((id) => setAccounts((prev) => prev.filter((a) => a.id !== id)), []);
   // Ajuste manual y directo del saldo de una caja (por ejemplo, para corregir
@@ -798,6 +869,7 @@ function AppDataProvider({ children }) {
     setTransactions([]);
     setGoals([]);
     setDebts([]);
+    setInstallments([]);
     setAccounts([
       { id: uid(), name: "Efectivo", type: "cash", balance: 0, isAsset: true },
       { id: uid(), name: "Billetera Virtual", type: "wallet", balance: 0, isAsset: true },
@@ -808,7 +880,7 @@ function AppDataProvider({ children }) {
   const updateProfile = useCallback((p) => setProfile((prev) => ({ ...prev, ...p })), []);
   const toggleHideBalances = useCallback(() => setProfile((prev) => ({ ...prev, hideBalances: !prev.hideBalances })), []);
 
-  const exportJSON = useCallback(() => JSON.stringify({ transactions, categories, budgets, goals, debts, accounts, profile, exportedAt: new Date().toISOString() }, null, 2), [transactions, categories, budgets, goals, debts, accounts, profile]);
+  const exportJSON = useCallback(() => JSON.stringify({ transactions, categories, budgets, goals, debts, installments, accounts, profile, exportedAt: new Date().toISOString() }, null, 2), [transactions, categories, budgets, goals, debts, installments, accounts, profile]);
   const importJSON = useCallback((json) => {
     try {
       const p = JSON.parse(json);
@@ -817,6 +889,7 @@ function AppDataProvider({ children }) {
       if (p.budgets) setBudgets(p.budgets);
       if (p.goals) setGoals(p.goals);
       if (p.debts) setDebts(p.debts);
+      if (p.installments) setInstallments(p.installments);
       if (p.accounts) setAccounts(p.accounts);
       if (p.profile) setProfile((prev) => ({ ...prev, ...p.profile }));
       return { success: true };
@@ -845,11 +918,12 @@ function AppDataProvider({ children }) {
   }, []);
 
   const value = {
-    transactions, categories, budgets, goals, debts, accounts, profile,
+    transactions, categories, budgets, goals, debts, accounts, installments, profile,
     supabaseConfig, setSupabaseConfig, syncCode, setSyncCode, syncing, lastSyncAt, pullFromCloud,
     cloudEnabled: !!cloudClient && !!syncCode,
     addTransaction, updateTransaction, deleteTransaction, bulkAddTransactions, addTransfer, duplicateTransaction,
     upsertBudget, deleteBudget, addGoal, updateGoal, deleteGoal, addDebt, deleteDebt,
+    addInstallment, deleteInstallment,
     addAccount, deleteAccount, setAccountBalance, resetAllData, updateProfile, toggleHideBalances,
     exportJSON, importJSON, exportCSV, importCSV,
   };
@@ -1099,21 +1173,30 @@ function Header() {
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-4 md:px-8 border-b border-slate-800/70 bg-onyx-950/70 backdrop-blur-xl gap-3">
       <div className="flex items-center gap-3 min-w-0">
+        {/* Logo insignia — siempre visible en el Header, incluso en mobile
+            donde el Sidebar con la marca queda oculto. */}
+        <button onClick={goHome} title="JP Finance System — Seven Tangos" className="flex items-center gap-2.5 shrink-0">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-champagne to-champagne-light/60 shadow-glow-champagne">
+            <Icon name="gem" size={17} className="text-onyx-950" />
+          </div>
+          <span className="hidden sm:block text-sm font-semibold font-display text-gradient-champagne tracking-wide whitespace-nowrap">JP · SEVEN TANGOS</span>
+        </button>
         {page !== "dashboard" && (
-          <Btn variant="outline" size="sm" onClick={goHome} className="shrink-0" title="Volver al Centro de Control">
+          <Btn variant="outline" size="sm" onClick={goHome} className="shrink-0 hidden sm:inline-flex" title="Volver al Centro de Control">
             <Icon name="home" size={15} />
-            <span className="hidden sm:inline">Centro de Control</span>
+            <span className="hidden lg:inline">Centro de Control</span>
           </Btn>
         )}
-        <div className="min-w-0">
-          <h1 className="text-base md:text-lg font-semibold font-display text-slate-100 truncate">{PAGE_LABEL[page]}</h1>
-          <p className="text-[11px] text-slate-500 hidden sm:block">{new Intl.DateTimeFormat("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date())}</p>
+        <div className="min-w-0 hidden md:block pl-1 border-l border-slate-800/70 ml-1">
+          <h1 className="text-base md:text-lg font-semibold font-display text-slate-100 truncate px-2">{PAGE_LABEL[page]}</h1>
+          <p className="text-[11px] text-slate-500 hidden sm:block px-2">{new Intl.DateTimeFormat("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date())}</p>
         </div>
       </div>
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
-        <div className={cx("hidden sm:flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium", syncedLabel === "Cloud" ? "border-emerald-metallic/30 bg-emerald-metallic/10 text-emerald-metallic" : "border-slate-700 bg-slate-800/50 text-slate-400")}>
+        <div className={cx("flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium", syncedLabel === "Cloud" ? "border-emerald-metallic/30 bg-emerald-metallic/10 text-emerald-metallic" : "border-slate-700 bg-slate-800/50 text-slate-400")}>
+          <span className={cx("h-1.5 w-1.5 rounded-full", syncedLabel === "Cloud" ? "bg-emerald-metallic animate-pulse" : "bg-slate-500")}></span>
           <Icon name={syncedLabel === "Cloud" ? "cloud" : "cloud-off"} size={13} />
-          {syncedLabel}
+          <span className="hidden sm:inline">{syncedLabel}</span>
         </div>
         <Btn variant={profile.hideBalances ? "primary" : "outline"} size="sm" onClick={toggleHideBalances} title={profile.hideBalances ? "Mostrar saldos" : "Ocultar saldos"}>
           <Icon name={profile.hideBalances ? "eye-off" : "eye"} size={15} />
@@ -1169,20 +1252,53 @@ function CashBoxCard({ acc, icon, missingLabel, missingType, onCreate }) {
 // queda en el bolsillo y en la billetera virtual hoy?" — con el total
 // consolidado arriba y el desglose de cada caja, editable en el momento.
 function CashBoxToday() {
-  const { accounts, profile, addAccount } = useApp();
+  const { accounts, profile, addAccount, setAccountBalance } = useApp();
   const cash = accounts.find((a) => a.type === "cash");
   const wallet = accounts.find((a) => a.type === "wallet");
   const total = (cash ? cash.balance : 0) + (wallet ? wallet.balance : 0);
   const createBox = (type) => addAccount({ name: type === "cash" ? "Efectivo" : "Billetera Virtual", type, balance: 0, isAsset: true });
+
+  // Arqueo rápido de caja: ajusta las dos cajas de una sola vez (por ejemplo,
+  // al contar el efectivo real que tenés en el bolsillo) sin abrir ninguna
+  // ventana — el formulario se expande dentro de la misma tarjeta.
+  const [arqueo, setArqueo] = useState(false);
+  const [cashVal, setCashVal] = useState("");
+  const [walletVal, setWalletVal] = useState("");
+  const startArqueo = () => { setCashVal(cash ? String(cash.balance) : "0"); setWalletVal(wallet ? String(wallet.balance) : "0"); setArqueo(true); };
+  const saveArqueo = () => {
+    const cv = parseFloat(cashVal); const wv = parseFloat(walletVal);
+    if (cash && !isNaN(cv)) setAccountBalance(cash.id, cv);
+    if (wallet && !isNaN(wv)) setAccountBalance(wallet.id, wv);
+    setArqueo(false);
+  };
+
   return (
     <Card>
       <CardContent className="p-6">
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Dinero en Caja Hoy</p>
-        <div className="text-4xl font-semibold font-display text-gradient-champagne mb-5"><AmountText value={total} currency={profile.currency} /></div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <CashBoxCard acc={cash} icon="banknote" missingLabel="💵 Efectivo" missingType="cash" onCreate={createBox} />
-          <CashBoxCard acc={wallet} icon="smartphone" missingLabel="📱 Billetera Virtual" missingType="wallet" onCreate={createBox} />
+        <div className="flex items-start justify-between mb-2">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Dinero en Caja Hoy</p>
+          {(cash || wallet) && (
+            <Btn size="sm" variant="outline" onClick={arqueo ? saveArqueo : startArqueo}>
+              <Icon name={arqueo ? "check-circle-2" : "pencil"} size={14} /> {arqueo ? "Guardar Arqueo" : "Ajustar Saldos"}
+            </Btn>
+          )}
         </div>
+        <div className="text-4xl font-semibold font-display text-gradient-champagne mb-5"><AmountText value={total} currency={profile.currency} /></div>
+        {arqueo ? (
+          <div className="rounded-lg border border-champagne/30 bg-champagne/5 p-4 space-y-3 animate-fade-in">
+            <p className="text-[11px] text-slate-500">Arqueo rápido: corregí el saldo real de cada caja de una sola vez.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {cash && <div><Label>💵 Efectivo</Label><Input autoFocus type="number" value={cashVal} onChange={(e) => setCashVal(e.target.value)} /></div>}
+              {wallet && <div><Label>📱 Billetera Virtual</Label><Input type="number" value={walletVal} onChange={(e) => setWalletVal(e.target.value)} /></div>}
+            </div>
+            <button onClick={() => setArqueo(false)} className="text-xs text-slate-500 hover:text-champagne underline underline-offset-2">Cancelar</button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <CashBoxCard acc={cash} icon="banknote" missingLabel="💵 Efectivo" missingType="cash" onCreate={createBox} />
+            <CashBoxCard acc={wallet} icon="smartphone" missingLabel="📱 Billetera Virtual" missingType="wallet" onCreate={createBox} />
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -1731,14 +1847,209 @@ function DailySpendFilter() {
 // queda en el bolsillo y en la billetera hoy?" y "¿cuánto puedo gastar hoy?".
 // Los gráficos complejos y las proyecciones a largo plazo viven en la
 // pestaña secundaria "Patrimonio" (ver AnalyticsPage → tab "Panorama").
+// Módulo de Ingresos Mixtos: separa el Sueldo Fijo Mensual (con fecha
+// estimada de cobro, editable inline) de los Ingresos Variables por
+// Planificaciones Online (cobros de clientes, sumados con un toque), y
+// muestra el total consolidado de ingresos del mes.
+function IncomeSourcesCard() {
+  const { transactions, profile, updateProfile } = useApp();
+  const { openMovement } = useNav();
+  const [editingSalary, setEditingSalary] = useState(false);
+  const [salaryAmt, setSalaryAmt] = useState("");
+  const [salaryDay, setSalaryDay] = useState("");
+
+  const cm = monthKey(new Date().toISOString());
+  const monthIncomeTx = useMemo(() => transactions.filter((t) => t.type === "income" && monthKey(t.date) === cm), [transactions, cm]);
+  const fixedReceived = monthIncomeTx.filter((t) => t.categoryId === "cat-salary").reduce((s, t) => s + t.amount, 0);
+  const variableReceived = monthIncomeTx.filter((t) => t.categoryId === "cat-freelance").reduce((s, t) => s + t.amount, 0);
+  const otherReceived = monthIncomeTx.filter((t) => t.categoryId !== "cat-salary" && t.categoryId !== "cat-freelance").reduce((s, t) => s + t.amount, 0);
+  const totalReceived = fixedReceived + variableReceived + otherReceived;
+  const salaryAlreadyLogged = fixedReceived > 0;
+
+  const startEditSalary = () => { setSalaryAmt(String(profile.fixedSalaryAmount || 0)); setSalaryDay(String(profile.fixedSalaryDay || 1)); setEditingSalary(true); };
+  const saveSalary = () => {
+    updateProfile({ fixedSalaryAmount: parseFloat(salaryAmt) || 0, fixedSalaryDay: Math.min(Math.max(parseInt(salaryDay, 10) || 1, 1), 28) });
+    setEditingSalary(false);
+  };
+
+  return (
+    <Card>
+      <CardHeader><div className="flex items-center gap-2"><Icon name="wallet" size={15} className="text-champagne" /><CardTitle className="!text-slate-300">Ingresos del Mes</CardTitle></div><CardDescription>Sueldo fijo + planificaciones online</CardDescription></CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-center justify-between rounded-lg border border-slate-800/70 bg-slate-900/40 px-4 py-3">
+          <span className="text-sm text-slate-300">Total Consolidado</span>
+          <span className="text-xl font-semibold font-display tabular-nums text-champagne"><AmountText value={totalReceived} currency={profile.currency} /></span>
+        </div>
+
+        <div className="rounded-lg border border-slate-800/70 bg-slate-900/40 p-4">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2 text-sm text-slate-100"><Icon name="briefcase" size={15} className="text-emerald-metallic" /> Sueldo Fijo Mensual</div>
+            {!editingSalary && <button onClick={startEditSalary} title="Editar" className="text-slate-500 hover:text-champagne"><Icon name="pencil" size={13} /></button>}
+          </div>
+          {editingSalary ? (
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <div><Label>Monto</Label><Input autoFocus type="number" value={salaryAmt} onChange={(e) => setSalaryAmt(e.target.value)} /></div>
+              <div><Label>Día de cobro</Label><Input type="number" min="1" max="28" value={salaryDay} onChange={(e) => setSalaryDay(e.target.value)} /></div>
+              <div className="col-span-2 flex justify-end gap-2"><Btn size="sm" variant="ghost" onClick={() => setEditingSalary(false)}>Cancelar</Btn><Btn size="sm" onClick={saveSalary}>Guardar</Btn></div>
+            </div>
+          ) : (
+            <>
+              <p className="text-lg font-semibold font-display tabular-nums text-slate-100"><AmountText value={profile.fixedSalaryAmount || 0} currency={profile.currency} /></p>
+              <div className="flex items-center justify-between mt-1">
+                <p className="text-[11px] text-slate-500">Cobro estimado: día {profile.fixedSalaryDay || 1} de cada mes</p>
+                <Badge variant={salaryAlreadyLogged ? "emerald" : "default"}>{salaryAlreadyLogged ? "Cobrado este mes" : "Pendiente"}</Badge>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-slate-800/70 bg-slate-900/40 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-slate-100"><Icon name="laptop" size={15} className="text-cobalt" /> Planificaciones Online</div>
+            <Btn size="sm" variant="outline" onClick={() => openMovement("income", "cat-freelance")}><Icon name="plus" size={13} /> Sumar Cobro</Btn>
+          </div>
+          <p className="text-lg font-semibold font-display tabular-nums text-slate-100 mt-2"><AmountText value={variableReceived} currency={profile.currency} /></p>
+          <p className="text-[11px] text-slate-500 mt-0.5">Suma de cada cobro de cliente cargado este mes</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+// Estrategia de Cierre de Mes: gasto promedio mensual + una recomendación
+// concreta según si el mes va a cerrar con sobrante o con faltante.
+function MonthClosingCard() {
+  const { transactions, categories, profile } = useApp();
+  const { avgMonthlyExpense, recommendation } = useMemo(() => computeMonthClosingStrategy(transactions, categories), [transactions, categories]);
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2"><Icon name="target" size={15} className="text-champagne" /><CardTitle className="!text-slate-300">Estrategia de Cierre de Mes</CardTitle></div>
+        <CardDescription>Gasto Promedio Mensual: {formatCurrency(avgMonthlyExpense, profile.currency)}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {recommendation.kind === "surplus" && (
+          <div className="rounded-lg border border-emerald-metallic/30 bg-emerald-metallic/10 p-4 flex items-start gap-3">
+            <Icon name="trending-up" size={18} className="text-emerald-metallic mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm text-slate-100">Vas a cerrar el mes con sobrante</p>
+              <p className="text-sm text-slate-400 mt-1">Te sugerimos destinar <span className="text-emerald-metallic font-semibold"><AmountText value={recommendation.toSave} currency={profile.currency} /></span> a Ahorro/Inversión y dejar <span className="text-champagne font-semibold"><AmountText value={recommendation.toKeep} currency={profile.currency} /></span> disponible.</p>
+            </div>
+          </div>
+        )}
+        {recommendation.kind === "deficit" && (
+          <div className="rounded-lg border border-crimson-elegant/30 bg-crimson-elegant/10 p-4 flex items-start gap-3">
+            <Icon name="alert-triangle" size={18} className="text-crimson-elegant mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm text-slate-100">Vas a cerrar el mes en rojo</p>
+              <p className="text-sm text-slate-400 mt-1">
+                Te faltarían <AmountText value={recommendation.deficit} currency={profile.currency} /> para cerrar el mes.{" "}
+                {recommendation.worstCategory ? (<>Recortá en <span className="text-crimson-elegant font-semibold">{recommendation.worstCategory.name}</span> (llevás <AmountText value={recommendation.worstCategoryAmount} currency={profile.currency} /> ahí este mes) para no quedar en rojo.</>) : "Revisá tus gastos variables para no quedar en rojo."}
+              </p>
+            </div>
+          </div>
+        )}
+        {recommendation.kind === "even" && <p className="text-sm text-slate-400">Tus ingresos y gastos proyectados están equilibrados este mes.</p>}
+      </CardContent>
+    </Card>
+  );
+}
+// Control de Vencimientos y Cuotas: registra compras en 3/6/12 cuotas,
+// calcula qué vence en los próximos 7-15 días (pagos fijos + cuotas) y con
+// eso el "Saldo 100% Libre" — la plata líquida que de verdad no tiene destino.
+function InstallmentsAndDueCard() {
+  const { accounts, transactions, installments, categories, addInstallment, deleteInstallment, profile } = useApp();
+  const due = useMemo(() => computeUpcomingDue(transactions, installments, 15), [transactions, installments]);
+  const cash = accounts.find((a) => a.type === "cash");
+  const wallet = accounts.find((a) => a.type === "wallet");
+  const liquid = (cash ? cash.balance : 0) + (wallet ? wallet.balance : 0);
+  const freeBalance = liquid - due.total;
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ description: "", totalAmount: "", installmentsCount: "3", startDate: new Date().toISOString().slice(0, 10), categoryId: "" });
+
+  const submit = () => {
+    const total = parseFloat(form.totalAmount); const count = parseInt(form.installmentsCount, 10);
+    if (!form.description.trim() || isNaN(total) || total <= 0 || !count) return;
+    addInstallment({ description: form.description.trim(), totalAmount: total, installmentsCount: count, installmentAmount: Math.round((total / count) * 100) / 100, startDate: form.startDate, categoryId: form.categoryId || null });
+    setForm({ description: "", totalAmount: "", installmentsCount: "3", startDate: new Date().toISOString().slice(0, 10), categoryId: "" });
+    setShowForm(false);
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <div><div className="flex items-center gap-2"><Icon name="calendar-clock" size={15} className="text-champagne" /><CardTitle className="!text-slate-300">Próximos Vencimientos (7-15 días)</CardTitle></div><CardDescription>Compromisos que ya sabés que vienen</CardDescription></div>
+        <Btn size="sm" variant="outline" onClick={() => setShowForm((s) => !s)}><Icon name="plus" size={14} /> Compra en Cuotas</Btn>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-lg border border-slate-800/70 bg-slate-900/40 p-4 flex items-center justify-between gap-3">
+          <div className="min-w-0"><p className="text-[11px] text-slate-500 uppercase tracking-wider">Saldo 100% Libre</p><p className="text-[11px] text-slate-500 mt-0.5">Efectivo + Billetera menos lo que vence en los próximos 15 días</p></div>
+          <span className={cx("text-xl font-semibold font-display tabular-nums shrink-0", freeBalance >= 0 ? "text-emerald-metallic" : "text-crimson-elegant")}><AmountText value={freeBalance} currency={profile.currency} /></span>
+        </div>
+
+        {showForm && (
+          <div className="rounded-lg border border-champagne/30 bg-champagne/5 p-4 space-y-3 animate-fade-in">
+            <div><Label>Descripción</Label><Input autoFocus placeholder="Ej: Heladera, Notebook..." value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Monto Total</Label><Input type="number" min="0" value={form.totalAmount} onChange={(e) => setForm((f) => ({ ...f, totalAmount: e.target.value }))} /></div>
+              <div><Label>Cuotas</Label><Select value={form.installmentsCount} onChange={(v) => setForm((f) => ({ ...f, installmentsCount: v }))}><option value="3">3 cuotas</option><option value="6">6 cuotas</option><option value="12">12 cuotas</option></Select></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Primera Cuota</Label><Input type="date" value={form.startDate} onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))} /></div>
+              <div><Label>Categoría (opcional)</Label><Select value={form.categoryId} onChange={(v) => setForm((f) => ({ ...f, categoryId: v }))}><option value="">Sin categoría</option>{categories.filter((c) => c.type === "expense").map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></div>
+            </div>
+            {form.totalAmount && form.installmentsCount && (
+              <p className="text-[11px] text-slate-500">≈ {formatCurrency((parseFloat(form.totalAmount) || 0) / (parseInt(form.installmentsCount, 10) || 1), profile.currency)} por cuota</p>
+            )}
+            <div className="flex justify-end gap-2"><Btn variant="ghost" size="sm" onClick={() => setShowForm(false)}>Cancelar</Btn><Btn size="sm" onClick={submit}>Registrar Compra</Btn></div>
+          </div>
+        )}
+
+        {due.items.length === 0 ? (
+          <p className="text-sm text-slate-500 py-4 text-center">Sin vencimientos en los próximos 15 días.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {due.items.map((it) => (
+              <div key={it.id} className="flex items-center justify-between py-2 border-b border-slate-800/50 last:border-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={cx("flex h-7 w-7 shrink-0 items-center justify-center rounded-md", it.kind === "cuota" ? "bg-cobalt/10 text-cobalt" : "bg-champagne/10 text-champagne")}><Icon name={it.kind === "cuota" ? "credit-card" : "repeat"} size={13} /></div>
+                  <div className="min-w-0"><p className="text-sm text-slate-100 truncate">{it.description}</p><p className="text-[11px] text-slate-500">{formatDate(it.date)}</p></div>
+                </div>
+                <span className="text-sm font-medium tabular-nums text-crimson-elegant shrink-0 pl-2">{formatCurrency(it.amount, profile.currency)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {installments.length > 0 && (
+          <div className="pt-2 border-t border-slate-800/70">
+            <p className="text-[11px] text-slate-500 uppercase tracking-wider mb-2">Compras en Cuotas Activas</p>
+            <div className="space-y-1.5">
+              {installments.map((p) => (
+                <div key={p.id} className="flex items-center justify-between py-1.5">
+                  <span className="text-xs text-slate-400 truncate pr-2">{p.description} · {p.installmentsCount}x {formatCurrency(p.installmentAmount, profile.currency)}</span>
+                  <button onClick={() => deleteInstallment(p.id)} title="Eliminar"><Icon name="trash-2" size={13} className="text-slate-500 hover:text-crimson-elegant shrink-0" /></button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+// Dashboard de uso cotidiano: cajas líquidas, cuánto se puede gastar hoy,
+// ingresos del mes, estrategia de cierre y vencimientos — todo accionable y
+// sin gráficos pesados (esos viven en la pestaña secundaria "Patrimonio").
 function DashboardPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <CashBoxToday />
       <DailySpendLimitWidget />
       <QuickActionsPanel />
-      <MovementPanel />
+      <IncomeSourcesCard />
+      <MonthClosingCard />
       <WalletFlowCard />
+      <InstallmentsAndDueCard />
       <DailySpendFilter />
       <RecentTransactions />
     </div>
@@ -2519,7 +2830,7 @@ function DataResetCard() {
           <Btn variant="destructive" onClick={() => setConfirming(true)}><Icon name="trash-2" size={16} /> Vaciar Datos de Prueba y Empezar de Cero</Btn>
         ) : (
           <div className="rounded-lg border border-crimson-elegant/40 bg-crimson-elegant/10 p-4 space-y-3 animate-fade-in">
-            <p className="text-sm text-slate-100">¿Seguro? Se van a borrar todas las transacciones, metas y deudas guardadas, y tus cajas de Efectivo y Billetera Virtual vuelven a $0. Esta acción no se puede deshacer.</p>
+            <p className="text-sm text-slate-100">¿Seguro? Se van a borrar todas las transacciones, metas, deudas y compras en cuotas guardadas, y tus cajas de Efectivo y Billetera Virtual vuelven a $0. Esta acción no se puede deshacer.</p>
             <div className="flex gap-2">
               <Btn variant="ghost" size="sm" onClick={() => setConfirming(false)}>Cancelar</Btn>
               <Btn variant="destructive" size="sm" onClick={doReset}><Icon name="trash-2" size={14} /> Sí, borrar todo</Btn>
@@ -2549,15 +2860,40 @@ function SettingsPage() {
 /* ============================================================================
    APP ROOT
    ============================================================================ */
+// Botón Flotante (+) de carga rápida — visible en mobile en cualquier parte
+// del scroll. Abre el mismo panel único (MovementPanel, ahora global en el
+// Shell) y sube al inicio de la página para que se vea al instante.
+function FAB() {
+  const { openMovement } = useNav();
+  const handleClick = () => {
+    openMovement("expense");
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  return (
+    <button onClick={handleClick} title="Carga rápida" aria-label="Carga rápida"
+      className="md:hidden fixed right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-champagne text-onyx-950 shadow-glow-champagne active:scale-95 transition-transform"
+      style={{ bottom: "calc(4rem + env(safe-area-inset-bottom) + 12px)" }}>
+      <Icon name="plus" size={26} />
+    </button>
+  );
+}
 function Shell({ children }) {
+  const { movement } = useNav();
   return (
     <div className="flex min-h-screen bg-onyx-950">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
-        <main className="flex-1 px-4 md:px-8 py-6 pb-24 md:pb-8 max-w-[1600px] w-full mx-auto">{children}</main>
+        <main className="flex-1 px-4 md:px-8 py-6 pb-24 md:pb-8 max-w-[1600px] w-full mx-auto space-y-6">
+          {/* Panel único global — así la Carga Exprès y el FAB funcionan
+              desde cualquier página, sin duplicar el panel ni abrir una
+              segunda capa flotante. */}
+          <MovementPanel />
+          {children}
+        </main>
       </div>
       <MobileBar />
+      {!movement && <FAB />}
     </div>
   );
 }
