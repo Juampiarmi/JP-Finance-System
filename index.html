@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
 <title>JP Finance System — Seven Tangos</title>
 <meta name="description" content="Control diario de tu plata en pesos: cuánto tenés en efectivo y billetera virtual, cuánto podés gastar hoy, y hacia dónde va tu dinero." />
-<meta name="theme-color" content="#090D16" />
+<meta name="theme-color" content="#07090F" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Seven Tangos" />
@@ -27,8 +27,8 @@
     scope: "./",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#090D16",
-    theme_color: "#090D16",
+    background_color: "#07090F",
+    theme_color: "#07090F",
     icons: [
       { src: ICON_192, sizes: "192x192", type: "image/png", purpose: "any" },
       { src: ICON_512, sizes: "512x512", type: "image/png", purpose: "any" },
@@ -54,10 +54,12 @@
     theme: {
       extend: {
         colors: {
-          onyx: { 950: "#090D16", 900: "#0D1420", 850: "#111A2A", 800: "#16202F" },
-          champagne: { DEFAULT: "#D4AF7A", light: "#E8CFA0", dark: "#B8925A" },
+          onyx: { 950: "#07090F", 900: "#0B0F18", 850: "#0F1521", 800: "#141B29" },
+          champagne: { DEFAULT: "#D4AF7A", light: "#F0D9A8", dark: "#B8925A" },
           cobalt: { DEFAULT: "#3B82F6" },
-          emerald: { metallic: "#10B981" },
+          // "Abundancia": esmeralda vivo para crecimiento/plata a favor, junto
+          // al metallic más apagado que ya se usaba en textos secundarios.
+          emerald: { metallic: "#10B981", vivid: "#00E39E" },
           crimson: { elegant: "#F43F5E" },
         },
         fontFamily: {
@@ -65,10 +67,11 @@
           display: ['"Plus Jakarta Sans"', "ui-sans-serif", "sans-serif"],
         },
         boxShadow: {
-          glow: "0 0 0 1px rgba(255,255,255,0.04), 0 8px 24px -8px rgba(0,0,0,0.6)",
+          glow: "0 0 0 1px rgba(255,255,255,0.05), 0 8px 28px -10px rgba(0,0,0,0.65)",
           "glow-emerald": "0 0 24px -4px rgba(16,185,129,0.35)",
+          "glow-emerald-vivid": "0 0 28px -4px rgba(0,227,158,0.45)",
           "glow-crimson": "0 0 24px -4px rgba(244,63,94,0.35)",
-          "glow-champagne": "0 0 24px -4px rgba(212,175,122,0.35)",
+          "glow-champagne": "0 0 24px -4px rgba(212,175,122,0.4)",
           "glow-cobalt": "0 0 24px -4px rgba(59,130,246,0.35)",
         },
         keyframes: {
@@ -88,13 +91,17 @@
 <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.6/babel.min.js"></script>
 
 <style>
-  html, body { background: #090D16; }
+  html, body { background: #07090F; }
   body {
     font-family: Inter, ui-sans-serif, system-ui, sans-serif;
     color: #e5e9f0;
+    /* "Modern Executive & Abundance": obsidiana profunda con brillos sutiles
+       de esmeralda vivo (crecimiento) y champagne/oro (riqueza) flotando en
+       el fondo, en vez del tono más frío/corporativo de antes. */
     background-image:
-      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(59,130,246,0.08), transparent),
-      radial-gradient(ellipse 60% 40% at 100% 0%, rgba(212,175,122,0.06), transparent);
+      radial-gradient(ellipse 70% 45% at 15% -8%, rgba(0,227,158,0.08), transparent),
+      radial-gradient(ellipse 60% 40% at 100% 0%, rgba(212,175,122,0.09), transparent),
+      radial-gradient(ellipse 55% 35% at 50% 100%, rgba(59,130,246,0.05), transparent);
     background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
   }
@@ -106,7 +113,26 @@
     background: linear-gradient(135deg, #f0dfb8 0%, #d4af7a 50%, #b8925a 100%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
-  .glass-card { background: rgba(15,20,32,0.6); backdrop-filter: blur(16px); }
+  /* Gradiente "abundancia": mezcla esmeralda vivo + champagne para los
+     números que representan plata a favor / crecimiento (cajas, ingresos). */
+  .text-gradient-abundance {
+    background: linear-gradient(120deg, #00E39E 0%, #D4AF7A 65%, #F0D9A8 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  /* Glassmorphism: tarjetas translúcidas con borde fino iluminado y un
+     highlight sutil arriba, en vez del panel opaco anterior. */
+  .glass-card {
+    background: linear-gradient(180deg, rgba(20,27,41,0.62) 0%, rgba(11,15,24,0.5) 100%);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(212,175,122,0.12);
+    position: relative;
+  }
+  .glass-card::before {
+    content: "";
+    position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  }
   #root { min-height: 100vh; }
   input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
 </style>
@@ -200,6 +226,13 @@ function computeEmergencyRunway(transactions, accounts) {
   else if (months >= 3) { status = "Ajustado"; statusColor = "#D4AF7A"; }
   return { liquidAssets, avgMonthlyExpense, months, targetMonths, percentToTarget, status, statusColor };
 }
+// Un gasto marcado como "Ocasional / Aislado" sigue descontándose de la caja
+// real (ver addTransaction), pero se excluye de estos cálculos de ritmo
+// diario/mensual para que una compra puntual grande no distorsione el
+// Límite de Gasto Diario ni dispare una falsa alerta de cierre de mes en rojo.
+function excludeOccasionalExpenses(transactions) {
+  return transactions.filter((t) => !(t.type === "expense" && t.isOccasional));
+}
 function computeProjectedCashFlow(transactions) {
   const now = new Date();
   const cm = monthKey(now.toISOString());
@@ -207,7 +240,7 @@ function computeProjectedCashFlow(transactions) {
   const elapsedDays = now.getDate();
   const monthTx = transactions.filter((t) => monthKey(t.date) === cm);
   const income = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
-  const expense = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const expense = monthTx.filter((t) => t.type === "expense" && !t.isOccasional).reduce((s, t) => s + t.amount, 0);
   const pace = totalDays / Math.max(elapsedDays, 1);
   const projectedIncome = income * pace;
   const projectedExpense = expense * pace;
@@ -229,7 +262,7 @@ function computeWalletFlow(accounts, transactions, categories) {
     .filter((t) => t.isRecurring && t.recurrence && t.recurrence.active && fixedCategoryIds.has(t.categoryId))
     .reduce((s, t) => s + t.amount, 0);
   const freeToSpend = Math.max(walletBalance - reserved, 0);
-  const last3 = computeMonthlyTotals(transactions, lastNMonths(3));
+  const last3 = computeMonthlyTotals(excludeOccasionalExpenses(transactions), lastNMonths(3));
   const avgMonthlyExpense = (last3.reduce((s, m) => s + m.expense, 0) / 3) || 0;
   const avgDailySpend = avgMonthlyExpense / 30;
   const comfortableBuffer = avgDailySpend * 10; // ~10 días de gasto habitual como margen razonable
@@ -250,8 +283,9 @@ function computeDailySpendLimit(accounts, transactions, categories) {
   const daysRemaining = Math.max(totalDays - now.getDate() + 1, 1);
   const dailyLimit = availableToSpend / daysRemaining;
   const todayStr = now.toISOString().slice(0, 10);
-  const spentToday = transactions.filter((t) => t.type === "expense" && t.date === todayStr).reduce((s, t) => s + t.amount, 0);
-  return { availableToSpend, daysRemaining, dailyLimit, spentToday, remainingToday: dailyLimit - spentToday };
+  const spentToday = transactions.filter((t) => t.type === "expense" && t.date === todayStr && !t.isOccasional).reduce((s, t) => s + t.amount, 0);
+  const occasionalToday = transactions.filter((t) => t.type === "expense" && t.date === todayStr && t.isOccasional).reduce((s, t) => s + t.amount, 0);
+  return { availableToSpend, daysRemaining, dailyLimit, spentToday, occasionalToday, remainingToday: dailyLimit - spentToday };
 }
 // Genera el calendario de cuotas de una compra (fecha de cada cuota, una por
 // mes desde la primera cuota).
@@ -292,7 +326,7 @@ function computeUpcomingDue(transactions, installments, daysAhead = 15) {
 // "deseos" conviene recortar (si falta) para no cerrar en rojo.
 function computeMonthClosingStrategy(transactions, categories) {
   const projection = computeProjectedCashFlow(transactions);
-  const last3 = computeMonthlyTotals(transactions, lastNMonths(3));
+  const last3 = computeMonthlyTotals(excludeOccasionalExpenses(transactions), lastNMonths(3));
   const avgMonthlyExpense = (last3.reduce((s, m) => s + m.expense, 0) / 3) || projection.expense || 0;
   const surplus = projection.projectedCashFlow;
   let recommendation;
@@ -301,7 +335,7 @@ function computeMonthClosingStrategy(transactions, categories) {
     recommendation = { kind: "surplus", toSave, toKeep: surplus - toSave, surplus };
   } else if (surplus < 0) {
     const cm = monthKey(new Date().toISOString());
-    const monthExp = transactions.filter((t) => t.type === "expense" && monthKey(t.date) === cm);
+    const monthExp = transactions.filter((t) => t.type === "expense" && monthKey(t.date) === cm && !t.isOccasional);
     const byCat = new Map();
     monthExp.forEach((t) => {
       const cat = categories.find((c) => c.id === t.categoryId);
@@ -946,7 +980,7 @@ function Btn({ children, variant = "default", size = "default", className = "", 
   const sizes = { default: "h-10 px-4 text-sm", sm: "h-8 px-3 text-xs", lg: "h-12 px-8 text-base", icon: "h-10 w-10", "icon-sm": "h-8 w-8" };
   return <button className={cx("inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none", variants[variant], sizes[size], className)} {...props}>{children}</button>;
 }
-function Card({ className = "", children, ...props }) { return <div className={cx("rounded-xl border border-slate-800/80 bg-gradient-to-b from-slate-900/80 to-slate-900/40 backdrop-blur-sm shadow-glow", className)} {...props}>{children}</div>; }
+function Card({ className = "", children, ...props }) { return <div className={cx("glass-card rounded-xl shadow-glow", className)} {...props}>{children}</div>; }
 function CardHeader({ className = "", children, ...props }) { return <div className={cx("flex flex-col space-y-1 p-5", className)} {...props}>{children}</div>; }
 function CardTitle({ className = "", children }) { return <h3 className={cx("text-sm font-medium text-slate-400 tracking-wide", className)}>{children}</h3>; }
 function CardDescription({ className = "", children }) { return <p className={cx("text-xs text-slate-500", className)}>{children}</p>; }
@@ -1193,8 +1227,8 @@ function Header() {
         </div>
       </div>
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
-        <div className={cx("flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium", syncedLabel === "Cloud" ? "border-emerald-metallic/30 bg-emerald-metallic/10 text-emerald-metallic" : "border-slate-700 bg-slate-800/50 text-slate-400")}>
-          <span className={cx("h-1.5 w-1.5 rounded-full", syncedLabel === "Cloud" ? "bg-emerald-metallic animate-pulse" : "bg-slate-500")}></span>
+        <div className={cx("flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium", syncedLabel === "Cloud" ? "border-emerald-vivid/40 bg-emerald-vivid/10 text-emerald-vivid shadow-glow-emerald-vivid" : "border-slate-700 bg-slate-800/50 text-slate-400")}>
+          <span className={cx("h-1.5 w-1.5 rounded-full", syncedLabel === "Cloud" ? "bg-emerald-vivid animate-pulse" : "bg-slate-500")}></span>
           <Icon name={syncedLabel === "Cloud" ? "cloud" : "cloud-off"} size={13} />
           <span className="hidden sm:inline">{syncedLabel}</span>
         </div>
@@ -1283,7 +1317,7 @@ function CashBoxToday() {
             </Btn>
           )}
         </div>
-        <div className="text-4xl font-semibold font-display text-gradient-champagne mb-5"><AmountText value={total} currency={profile.currency} /></div>
+        <div className="text-4xl font-semibold font-display text-gradient-abundance mb-5"><AmountText value={total} currency={profile.currency} /></div>
         {arqueo ? (
           <div className="rounded-lg border border-champagne/30 bg-champagne/5 p-4 space-y-3 animate-fade-in">
             <p className="text-[11px] text-slate-500">Arqueo rápido: corregí el saldo real de cada caja de una sola vez.</p>
@@ -1354,6 +1388,9 @@ function DailySpendLimitWidget() {
           <div><p className="text-[11px] text-slate-500 uppercase tracking-wider">Gastado Hoy</p><p className="text-sm font-medium tabular-nums text-slate-100"><AmountText value={d.spentToday} currency={profile.currency} /></p></div>
           <div className="text-right"><p className="text-[11px] text-slate-500 uppercase tracking-wider">Te Queda Hoy</p><p className={cx("text-sm font-medium tabular-nums", positive ? "text-emerald-metallic" : "text-crimson-elegant")}><AmountText value={d.remainingToday} currency={profile.currency} /></p></div>
         </div>
+        {d.occasionalToday > 0 && (
+          <p className="text-[11px] text-slate-500 mt-3 flex items-center gap-1.5"><Icon name="info" size={12} className="text-champagne shrink-0" /> Además marcaste <AmountText value={d.occasionalToday} currency={profile.currency} /> como gasto ocasional hoy — ya salió de tu caja pero no afecta este límite.</p>
+        )}
       </CardContent>
     </Card>
   );
@@ -1409,7 +1446,7 @@ function FundsOverview() {
         <div className="flex items-start justify-between mb-5">
           <div>
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Plata Disponible por Fondo</p>
-            <div className="text-4xl font-semibold font-display text-gradient-champagne"><AmountText value={totalAvailable} currency={profile.currency} /></div>
+            <div className="text-4xl font-semibold font-display text-gradient-abundance"><AmountText value={totalAvailable} currency={profile.currency} /></div>
           </div>
           <Btn variant="outline" size="icon" onClick={toggleHideBalances}><Icon name={profile.hideBalances ? "eye-off" : "eye"} size={16} /></Btn>
         </div>
@@ -1600,7 +1637,7 @@ function QuickActionsPanel() {
 }
 function MovementPanel() {
   const { movement, openMovement, closeMovement, setPage } = useNav();
-  const { categories, accounts, transactions, addTransaction, addTransfer, profile } = useApp();
+  const { categories, accounts, transactions, addTransaction, addTransfer, profile, updateProfile } = useApp();
   const { toast } = useToast();
   const open = !!movement;
   const type = movement ? movement.type : "expense";
@@ -1613,6 +1650,11 @@ function MovementPanel() {
   const [fromId, setFromId] = useState("");
   const [toId, setToId] = useState("");
   const [showOtherAccounts, setShowOtherAccounts] = useState(false);
+  // Gasto Ocasional / Aislado: se descuenta de la caja real igual que
+  // cualquier otro gasto, pero se excluye del cálculo del Límite de Gasto
+  // Diario y del "ritmo" mensual, para que una compra puntual grande no
+  // dispare falsas alertas de cierre de mes en rojo.
+  const [isOccasional, setIsOccasional] = useState(false);
 
   // Las dos cajas de uso diario — el resto de las cuentas (bancos, inversión,
   // tarjeta) queda disponible como "otra cuenta" sin competir visualmente
@@ -1622,8 +1664,11 @@ function MovementPanel() {
 
   useEffect(() => {
     if (!open) return;
-    setCategoryId((movement && movement.categoryId) || ""); setAmount(""); setDescription("");
-    const preferred = dailyBoxes.find((a) => a.type === "wallet") || dailyBoxes[0] || accounts[0];
+    setCategoryId((movement && movement.categoryId) || ""); setAmount(""); setDescription(""); setIsOccasional(false);
+    // La caja de entrada/salida NO queda fija: se recuerda la última que
+    // usaste (Efectivo o Billetera) para que la elección sea fluida en vez
+    // de forzar siempre la misma por defecto.
+    const preferred = dailyBoxes.find((a) => a.type === profile.lastUsedBoxType) || dailyBoxes[0] || accounts[0];
     setAccountId(preferred ? preferred.id : "");
     setShowOtherAccounts(false);
     setFromId((accounts[0] || {}).id || ""); setToId((accounts[1] || {}).id || "");
@@ -1646,7 +1691,8 @@ function MovementPanel() {
     } else {
       if (!categoryId) return toast({ title: "Elegí una categoría", variant: "error" });
       if (!accountId) return toast({ title: "Elegí de qué caja sale o entra la plata", variant: "error" });
-      addTransaction({ date, description: description.trim() || (selectedCategory ? selectedCategory.name : ""), amount: amt, type, categoryId, account: selectedAccount ? selectedAccount.name : "", accountId });
+      addTransaction({ date, description: description.trim() || (selectedCategory ? selectedCategory.name : ""), amount: amt, type, categoryId, account: selectedAccount ? selectedAccount.name : "", accountId, isOccasional: type === "expense" ? isOccasional : false });
+      if (selectedAccount && (selectedAccount.type === "cash" || selectedAccount.type === "wallet")) updateProfile({ lastUsedBoxType: selectedAccount.type });
       toast({ title: type === "income" ? "Ingreso registrado" : "Gasto registrado", description: (selectedAccount ? selectedAccount.name + " · " : "") + formatCurrency(amt, profile.currency), variant: "success" });
     }
     closeMovement();
@@ -1713,6 +1759,12 @@ function MovementPanel() {
               <div><Label>Fecha</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
               <div><Label>Descripción (opcional)</Label><Input placeholder={selectedCategory ? selectedCategory.name : "..."} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
             </div>
+            {type === "expense" && (
+              <div className="flex items-center justify-between rounded-lg border border-slate-800 px-4 py-3">
+                <div className="pr-3"><p className="text-sm font-medium text-slate-100">Gasto Ocasional / Aislado</p><p className="text-[11px] text-slate-500">No repetir en el ritmo diario — no cuenta para el Límite de Gasto Diario ni para el cierre de mes</p></div>
+                <Switch checked={isOccasional} onChange={setIsOccasional} />
+              </div>
+            )}
             <button onClick={openFullForm} className="text-xs text-slate-500 hover:text-champagne underline underline-offset-2">Cargar con más detalles (recurrencia, notas)</button>
           </>
         ) : (
@@ -2037,21 +2089,79 @@ function InstallmentsAndDueCard() {
     </Card>
   );
 }
-// Dashboard de uso cotidiano: cajas líquidas, cuánto se puede gastar hoy,
-// ingresos del mes, estrategia de cierre y vencimientos — todo accionable y
-// sin gráficos pesados (esos viven en la pestaña secundaria "Patrimonio").
+// Encabezado de bloque: numera y responde una pregunta clave del día,
+// acompañando al usuario en vez de solo mostrarle datos sueltos.
+function SectionHeader({ step, icon, title, subtitle }) {
+  return (
+    <div className="flex items-start gap-3 px-1 mb-3 mt-2">
+      <div className="shrink-0 mt-0.5 w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-vivid/20 to-champagne/10 border border-champagne/20 flex items-center justify-center">
+        <Icon name={icon} size={16} className="text-emerald-vivid" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold tracking-wide text-champagne/70 uppercase">Paso {step}</p>
+        <h2 className="text-base sm:text-lg font-bold text-slate-50 leading-snug">{title}</h2>
+        {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
+// Dashboard de uso cotidiano: estructurado en 3 bloques que responden a las
+// preguntas clave del día (cajas, cuánto puedo gastar, cómo viene mi ritmo de
+// ingresos) — todo accionable y sin gráficos pesados (esos viven en la
+// pestaña secundaria "Patrimonio"). El FAB (+) para carga instantánea vive
+// globalmente en el Shell.
 function DashboardPage() {
   return (
-    <div className="space-y-6 animate-fade-in">
-      <CashBoxToday />
-      <DailySpendLimitWidget />
+    <div className="space-y-8 animate-fade-in">
       <QuickActionsPanel />
-      <IncomeSourcesCard />
-      <MonthClosingCard />
-      <WalletFlowCard />
-      <InstallmentsAndDueCard />
-      <DailySpendFilter />
-      <RecentTransactions />
+
+      <section>
+        <SectionHeader
+          step="1"
+          icon="wallet"
+          title="¿Cuánto dinero tengo hoy en mis Cajas?"
+          subtitle="Efectivo vs Billetera Virtual, siempre al día"
+        />
+        <div className="space-y-4">
+          <CashBoxToday />
+        </div>
+      </section>
+
+      <section>
+        <SectionHeader
+          step="2"
+          icon="gauge"
+          title="¿Cuánto puedo gastar hoy sin comprometer el mes?"
+          subtitle="Límite diario inteligente, cierre de mes y compromisos próximos"
+        />
+        <div className="space-y-4">
+          <DailySpendLimitWidget />
+          <MonthClosingCard />
+          <WalletFlowCard />
+          <InstallmentsAndDueCard />
+        </div>
+      </section>
+
+      <section>
+        <SectionHeader
+          step="3"
+          icon="trending-up"
+          title="¿Cómo viene mi ritmo de Ingresos del mes?"
+          subtitle="Sueldo Fijo + Planificaciones Online"
+        />
+        <div className="space-y-4">
+          <IncomeSourcesCard />
+        </div>
+      </section>
+
+      <section>
+        <SectionHeader step="4" icon="activity" title="Actividad reciente" subtitle="Últimos movimientos registrados" />
+        <div className="space-y-4">
+          <DailySpendFilter />
+          <RecentTransactions />
+        </div>
+      </section>
     </div>
   );
 }
@@ -2081,11 +2191,11 @@ function nextOccurrence(dateISO, frequency) {
 function TransactionFormModal({ open, onClose, editing }) {
   const { categories, accounts, addTransaction, updateTransaction } = useApp();
   const { toast } = useToast();
-  const empty = { date: new Date().toISOString().slice(0, 10), description: "", amount: "", type: "expense", categoryId: "", accountId: "", notes: "", isRecurring: false, frequency: "monthly" };
+  const empty = { date: new Date().toISOString().slice(0, 10), description: "", amount: "", type: "expense", categoryId: "", accountId: "", notes: "", isRecurring: false, frequency: "monthly", isOccasional: false };
   const [form, setForm] = useState(empty);
   useEffect(() => {
     if (editing) {
-      setForm({ date: editing.date.slice(0, 10), description: editing.description, amount: String(editing.amount), type: editing.type, categoryId: editing.categoryId, accountId: editing.accountId || (accounts.find((a) => a.name === editing.account) || {}).id || "", notes: editing.notes || "", isRecurring: !!editing.isRecurring, frequency: (editing.recurrence && editing.recurrence.frequency) || "monthly" });
+      setForm({ date: editing.date.slice(0, 10), description: editing.description, amount: String(editing.amount), type: editing.type, categoryId: editing.categoryId, accountId: editing.accountId || (accounts.find((a) => a.name === editing.account) || {}).id || "", notes: editing.notes || "", isRecurring: !!editing.isRecurring, frequency: (editing.recurrence && editing.recurrence.frequency) || "monthly", isOccasional: !!editing.isOccasional });
     } else if (open) {
       setForm({ ...empty, categoryId: (categories.find((c) => c.type === "expense") || {}).id || "", accountId: (accounts[0] || {}).id || "" });
     }
@@ -2099,7 +2209,7 @@ function TransactionFormModal({ open, onClose, editing }) {
     if (!form.description.trim()) return toast({ title: "Falta la descripción", variant: "error" });
     if (isNaN(amount) || amount <= 0) return toast({ title: "El monto debe ser mayor a cero", variant: "error" });
     if (!form.categoryId) return toast({ title: "Seleccioná una categoría", variant: "error" });
-    const payload = { date: form.date, description: form.description.trim(), amount, type: form.type, categoryId: form.categoryId, account: selectedAccount ? selectedAccount.name : "", accountId: form.accountId || undefined, notes: form.notes.trim() || undefined, isRecurring: form.isRecurring, recurrence: form.isRecurring ? { frequency: form.frequency, nextDate: nextOccurrence(form.date, form.frequency), active: true } : undefined };
+    const payload = { date: form.date, description: form.description.trim(), amount, type: form.type, categoryId: form.categoryId, account: selectedAccount ? selectedAccount.name : "", accountId: form.accountId || undefined, notes: form.notes.trim() || undefined, isRecurring: form.isRecurring, recurrence: form.isRecurring ? { frequency: form.frequency, nextDate: nextOccurrence(form.date, form.frequency), active: true } : undefined, isOccasional: form.type === "expense" ? form.isOccasional : false };
     if (editing) { updateTransaction(editing.id, payload); toast({ title: "Transacción actualizada", variant: "success" }); }
     else { addTransaction(payload); toast({ title: "Transacción registrada", variant: "success" }); }
     onClose();
@@ -2129,6 +2239,12 @@ function TransactionFormModal({ open, onClose, editing }) {
           <div><Label>Frecuencia</Label><Select value={form.frequency} onChange={(v) => setForm((f) => ({ ...f, frequency: v }))}>
             <option value="weekly">Semanal</option><option value="biweekly">Quincenal</option><option value="monthly">Mensual</option><option value="yearly">Anual</option>
           </Select></div>
+        )}
+        {form.type === "expense" && (
+          <div className="flex items-center justify-between rounded-lg border border-slate-800 px-4 py-3">
+            <div className="pr-3"><p className="text-sm font-medium text-slate-100">Gasto Ocasional / Aislado</p><p className="text-[11px] text-slate-500">No repetir en el ritmo diario — no cuenta para el Límite de Gasto Diario ni para el cierre de mes</p></div>
+            <Switch checked={form.isOccasional} onChange={(v) => setForm((f) => ({ ...f, isOccasional: v }))} />
+          </div>
         )}
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-2 gap-2 sm:gap-0">
           <Btn type="button" variant="ghost" onClick={onClose}>Cancelar</Btn>
