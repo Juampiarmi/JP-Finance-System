@@ -189,19 +189,24 @@ function lastNMonths(n) {
   }
   return months;
 }
+// Los totales mensuales en pesos se calculan SIEMPRE excluyendo movimientos
+// en USD (Wise Personal / Wise LLC) — así un ingreso o gasto en dólares no
+// distorsiona ningún gráfico ni promedio en ARS. Las cuentas en USD tienen
+// su propio resumen dedicado (ver IncomeSourcesCard y CashBoxToday).
 function computeMonthlyTotals(transactions, months) {
+  const ars = filterArsOnly(transactions);
   return months.map((m) => {
-    const income = transactions.filter((t) => t.type === "income" && monthKey(t.date) === m).reduce((s, t) => s + t.amount, 0);
-    const expense = transactions.filter((t) => t.type === "expense" && monthKey(t.date) === m).reduce((s, t) => s + t.amount, 0);
+    const income = ars.filter((t) => t.type === "income" && monthKey(t.date) === m).reduce((s, t) => s + t.amount, 0);
+    const expense = ars.filter((t) => t.type === "expense" && monthKey(t.date) === m).reduce((s, t) => s + t.amount, 0);
     return { month: m, income, expense, net: income - expense };
   });
 }
-function computeKPIs(transactions, accounts) {
-  const totalAssets = accounts.filter((a) => a.isAsset).reduce((s, a) => s + a.balance, 0);
-  const totalLiabilities = accounts.filter((a) => !a.isAsset).reduce((s, a) => s + Math.abs(a.balance), 0);
+function computeKPIs(transactions, accounts, usdRate = 0) {
+  const totalAssets = accounts.filter((a) => a.isAsset).reduce((s, a) => s + accountValueArs(a, usdRate), 0);
+  const totalLiabilities = accounts.filter((a) => !a.isAsset).reduce((s, a) => s + Math.abs(accountValueArs(a, usdRate)), 0);
   const netWorth = totalAssets - totalLiabilities;
   const currentMonth = monthKey(new Date().toISOString());
-  const monthTx = transactions.filter((t) => monthKey(t.date) === currentMonth);
+  const monthTx = filterArsOnly(transactions).filter((t) => monthKey(t.date) === currentMonth);
   const monthIncome = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
   const monthExpense = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
   const monthlyCashFlow = monthIncome - monthExpense;
@@ -238,7 +243,7 @@ function computeProjectedCashFlow(transactions) {
   const cm = monthKey(now.toISOString());
   const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const elapsedDays = now.getDate();
-  const monthTx = transactions.filter((t) => monthKey(t.date) === cm);
+  const monthTx = filterArsOnly(transactions).filter((t) => monthKey(t.date) === cm);
   const income = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
   const expense = monthTx.filter((t) => t.type === "expense" && !t.isOccasional).reduce((s, t) => s + t.amount, 0);
   const pace = totalDays / Math.max(elapsedDays, 1);
@@ -258,7 +263,7 @@ function computeWalletFlow(accounts, transactions, categories) {
   const wallet = accounts.find((a) => a.type === "wallet");
   const walletBalance = wallet ? wallet.balance : 0;
   const fixedCategoryIds = new Set(categories.filter((c) => c.budgetGroup === "needs").map((c) => c.id));
-  const reserved = transactions
+  const reserved = filterArsOnly(transactions)
     .filter((t) => t.isRecurring && t.recurrence && t.recurrence.active && fixedCategoryIds.has(t.categoryId))
     .reduce((s, t) => s + t.amount, 0);
   const freeToSpend = Math.max(walletBalance - reserved, 0);
@@ -283,8 +288,8 @@ function computeDailySpendLimit(accounts, transactions, categories) {
   const daysRemaining = Math.max(totalDays - now.getDate() + 1, 1);
   const dailyLimit = availableToSpend / daysRemaining;
   const todayStr = now.toISOString().slice(0, 10);
-  const spentToday = transactions.filter((t) => t.type === "expense" && t.date === todayStr && !t.isOccasional).reduce((s, t) => s + t.amount, 0);
-  const occasionalToday = transactions.filter((t) => t.type === "expense" && t.date === todayStr && t.isOccasional).reduce((s, t) => s + t.amount, 0);
+  const spentToday = filterArsOnly(transactions).filter((t) => t.type === "expense" && t.date === todayStr && !t.isOccasional).reduce((s, t) => s + t.amount, 0);
+  const occasionalToday = filterArsOnly(transactions).filter((t) => t.type === "expense" && t.date === todayStr && t.isOccasional).reduce((s, t) => s + t.amount, 0);
   return { availableToSpend, daysRemaining, dailyLimit, spentToday, occasionalToday, remainingToday: dailyLimit - spentToday };
 }
 // Genera el calendario de cuotas de una compra (fecha de cada cuota, una por
@@ -335,7 +340,7 @@ function computeMonthClosingStrategy(transactions, categories) {
     recommendation = { kind: "surplus", toSave, toKeep: surplus - toSave, surplus };
   } else if (surplus < 0) {
     const cm = monthKey(new Date().toISOString());
-    const monthExp = transactions.filter((t) => t.type === "expense" && monthKey(t.date) === cm && !t.isOccasional);
+    const monthExp = filterArsOnly(transactions).filter((t) => t.type === "expense" && monthKey(t.date) === cm && !t.isOccasional);
     const byCat = new Map();
     monthExp.forEach((t) => {
       const cat = categories.find((c) => c.id === t.categoryId);
@@ -357,7 +362,7 @@ function computeMonthlyComparison(transactions, categories) {
   const prevMonths = lastNMonths(4).filter((m) => m !== cm);
   const sumByCategory = (m) => {
     const map = new Map();
-    transactions.filter((t) => t.type === "expense" && monthKey(t.date) === m).forEach((t) => map.set(t.categoryId, (map.get(t.categoryId) || 0) + t.amount));
+    filterArsOnly(transactions).filter((t) => t.type === "expense" && monthKey(t.date) === m).forEach((t) => map.set(t.categoryId, (map.get(t.categoryId) || 0) + t.amount));
     return map;
   };
   const currentMap = sumByCategory(cm);
@@ -379,13 +384,13 @@ function computeMonthlyComparison(transactions, categories) {
 // gasto en diagnósticos automáticos de tres tipos: estrategia de compras
 // (gastos mayores a evaluar), optimización de ahorro (gasto hormiga) y
 // sugerencia de inversión de excedentes.
-function computeCopilotDiagnostics(transactions, categories, accounts) {
-  const kpis = computeKPIs(transactions, accounts);
+function computeCopilotDiagnostics(transactions, categories, accounts, usdRate = 0) {
+  const kpis = computeKPIs(transactions, accounts, usdRate);
   const runway = computeEmergencyRunway(transactions, accounts);
   const comparison = computeMonthlyComparison(transactions, categories);
   const cm = monthKey(new Date().toISOString());
-  const monthExpenses = transactions.filter((t) => t.type === "expense" && monthKey(t.date) === cm);
-  const monthIncome = transactions.filter((t) => t.type === "income" && monthKey(t.date) === cm).reduce((s, t) => s + t.amount, 0);
+  const monthExpenses = filterArsOnly(transactions).filter((t) => t.type === "expense" && monthKey(t.date) === cm);
+  const monthIncome = filterArsOnly(transactions).filter((t) => t.type === "income" && monthKey(t.date) === cm).reduce((s, t) => s + t.amount, 0);
   const diagnostics = [];
 
   // 1) Comparación histórica: categorías que subieron fuerte vs el promedio
@@ -498,6 +503,7 @@ const RULE_502030 = { needs: 50, wants: 30, savings: 20 };
 const DEFAULT_CATEGORIES = [
   { id: "cat-salary", name: "Salario", color: "#10B981", type: "income", budgetGroup: "savings" },
   { id: "cat-freelance", name: "Freelance", color: "#10B981", type: "income", budgetGroup: "savings" },
+  { id: "cat-amazon", name: "Amazon FBA", color: "#00E39E", type: "income", budgetGroup: "savings" },
   { id: "cat-investments", name: "Inversiones", color: "#3B82F6", type: "income", budgetGroup: "savings" },
   { id: "cat-housing", name: "Vivienda", color: "#F43F5E", type: "expense", budgetGroup: "needs" },
   { id: "cat-utilities", name: "Servicios", color: "#F43F5E", type: "expense", budgetGroup: "needs" },
@@ -516,21 +522,44 @@ const DEFAULT_CATEGORIES = [
 const DEFAULT_ACCOUNTS = [
   { id: "acc-cash", name: "Efectivo", type: "cash", balance: 15000, isAsset: true },
   { id: "acc-wallet", name: "Mercado Pago", type: "wallet", balance: 320000, isAsset: true },
+  // Cajas en Dólares — Wise Personal para uso propio y Wise LLC para el
+  // negocio (payouts de Amazon FBA). Llevan su propio campo `currency`
+  // ("USD") y `business` para poder filtrarlas y consolidarlas al tipo de
+  // cambio de referencia sin mezclar su saldo con la caja operativa en
+  // pesos. Son cuentas 100% locales (accounts nunca se sincroniza a
+  // Supabase), así que agregarlas no toca el esquema de la nube.
+  { id: "acc-wise-personal", name: "Wise Personal", type: "usd_personal", currency: "USD", balance: 350, isAsset: true, business: false },
+  { id: "acc-wise-llc", name: "Wise LLC · Amazon FBA", type: "usd_llc", currency: "USD", balance: 1200, isAsset: true, business: true },
   { id: "acc-checking", name: "Cuenta Corriente", type: "checking", balance: 850000, isAsset: true },
   { id: "acc-savings", name: "Caja de Ahorro", type: "savings", balance: 2200000, isAsset: true },
   { id: "acc-investment", name: "Portafolio de Inversión", type: "investment", balance: 4500000, isAsset: true },
   { id: "acc-credit", name: "Tarjeta de Crédito", type: "credit", balance: 320000, isAsset: false },
 ];
-const DEFAULT_PROFILE = { fullName: "Juampi", currency: "ARS", locale: "es-AR", hideBalances: false, fixedSalaryAmount: 620000, fixedSalaryDay: 1 };
+const DEFAULT_PROFILE = { fullName: "Juampi", currency: "ARS", locale: "es-AR", hideBalances: false, fixedSalaryAmount: 620000, fixedSalaryDay: 1, usdRate: 1450 };
 // Íconos táctiles para la Carga Exprès — asociamos cada categoría común a un
 // ícono de Lucide para que el registro rápido se sienta tipo calculadora.
 const CATEGORY_ICON_MAP = {
-  "Salario": "briefcase", "Freelance": "laptop", "Inversiones": "trending-up",
+  "Salario": "briefcase", "Freelance": "laptop", "Inversiones": "trending-up", "Amazon FBA": "package",
   "Vivienda": "home", "Servicios": "zap", "Alimentación": "shopping-cart", "Transporte": "car",
   "Salud": "activity", "Gastronomía": "utensils", "Entretenimiento": "film", "Compras": "shopping-bag",
   "Viajes": "plane", "Suscripciones": "repeat", "Ahorro": "piggy-bank", "Inversión": "trending-up", "Otros": "more-horizontal",
 };
-const ACCOUNT_TYPE_LABEL = { cash: "Efectivo", wallet: "Billetera Virtual", checking: "Cuenta Corriente", savings: "Caja de Ahorro", investment: "Inversión", credit: "Tarjeta de Crédito", other: "Otro" };
+const ACCOUNT_TYPE_LABEL = { cash: "Efectivo", wallet: "Billetera Virtual", usd_personal: "Wise Personal (USD)", usd_llc: "Wise LLC · Amazon FBA (USD)", checking: "Cuenta Corriente", savings: "Caja de Ahorro", investment: "Inversión", credit: "Tarjeta de Crédito", other: "Otro" };
+// Cajas de uso diario (Carga Exprès) — ARS (Efectivo/Billetera) + USD (Wise).
+const DAILY_BOX_TYPES = ["cash", "wallet", "usd_personal", "usd_llc"];
+const DAILY_BOX_ICON = { cash: "banknote", wallet: "smartphone", usd_personal: "globe", usd_llc: "building-2" };
+function isUsdAccount(acc) { return !!acc && acc.currency === "USD"; }
+// Convierte el saldo de una cuenta a su equivalente en Pesos usando el tipo
+// de cambio de referencia — solo para CONSOLIDAR en vistas generales
+// (Patrimonio, Dinero Total Disponible). Nunca se usa para la caja
+// operativa diaria en ARS, que se calcula exclusivamente con Efectivo +
+// Billetera Virtual para no distorsionarla.
+function accountValueArs(acc, usdRate) { return isUsdAccount(acc) ? (acc.balance || 0) * (usdRate || 0) : (acc.balance || 0); }
+// Una transacción hereda la moneda de la caja usada (campo local `currency`,
+// nunca enviado a Supabase — ver pushCloud). Se usa para excluir los
+// movimientos en USD de todos los cálculos de "ritmo diario" en pesos.
+function isArsTransaction(t) { return t && t.currency !== "USD"; }
+function filterArsOnly(transactions) { return transactions.filter(isArsTransaction); }
 const GOAL_TYPE_LABEL = { savings: "Ahorro", investment: "Inversión", "debt-payoff": "Cancelación de Deuda", purchase: "Compra Mayor" };
 const FREQ_LABEL = { weekly: "Semanal", biweekly: "Quincenal", monthly: "Mensual", yearly: "Anual" };
 
@@ -705,6 +734,25 @@ function AppDataProvider({ children }) {
   }, []);
 
   useEffect(() => { if (!localStorage.getItem(KEYS.seeded)) localStorage.setItem(KEYS.seeded, "1"); }, []);
+  // Migración silenciosa para quienes ya tenían la app instalada: sus cajas,
+  // categorías y perfil guardados en LocalStorage reemplazan por completo a
+  // los defaults, así que las cajas Wise, la categoría Amazon FBA y el tipo
+  // de cambio de referencia nunca llegarían solos. Este efecto corre una
+  // sola vez al montar y SOLO agrega lo que falte — no toca ni un dato
+  // existente (ni local ni en la nube, que ni siquiera guarda cuentas,
+  // categorías o perfil).
+  useEffect(() => {
+    setAccounts((prev) => {
+      const has = (t) => prev.some((a) => a.type === t);
+      const additions = [];
+      if (!has("usd_personal")) additions.push({ id: uid(), name: "Wise Personal", type: "usd_personal", currency: "USD", balance: 0, isAsset: true, business: false });
+      if (!has("usd_llc")) additions.push({ id: uid(), name: "Wise LLC · Amazon FBA", type: "usd_llc", currency: "USD", balance: 0, isAsset: true, business: true });
+      return additions.length ? [...prev, ...additions] : prev;
+    });
+    setCategories((prev) => (prev.some((c) => c.id === "cat-amazon") ? prev : [...prev, { id: "cat-amazon", name: "Amazon FBA", color: "#00E39E", type: "income", budgetGroup: "savings" }]));
+    setProfile((prev) => (prev.usdRate !== undefined ? prev : { ...prev, usdRate: 1450 }));
+    // eslint-disable-next-line
+  }, []);
   useEffect(() => saveLocal(KEYS.transactions, transactions), [transactions]);
   useEffect(() => saveLocal(KEYS.categories, categories), [categories]);
   useEffect(() => saveLocal(KEYS.budgets, budgets), [budgets]);
@@ -807,7 +855,7 @@ function AppDataProvider({ children }) {
     if (tx.type === "transfer") {
       return addTransfer({ date: new Date().toISOString().slice(0, 10), fromAccountId: tx.fromAccountId, toAccountId: tx.toAccountId, amount: tx.amount, description: tx.description });
     }
-    return addTransaction({ date: new Date().toISOString().slice(0, 10), description: tx.description, amount: tx.amount, type: tx.type, categoryId: tx.categoryId, account: tx.account, accountId: tx.accountId, notes: tx.notes, isRecurring: false, recurrence: undefined });
+    return addTransaction({ date: new Date().toISOString().slice(0, 10), description: tx.description, amount: tx.amount, type: tx.type, categoryId: tx.categoryId, account: tx.account, accountId: tx.accountId, notes: tx.notes, isRecurring: false, recurrence: undefined, isOccasional: !!tx.isOccasional, currency: tx.currency || "ARS" });
     // eslint-disable-next-line
   }, [transactions]);
   const updateTransaction = useCallback((id, t) => {
@@ -907,6 +955,8 @@ function AppDataProvider({ children }) {
     setAccounts([
       { id: uid(), name: "Efectivo", type: "cash", balance: 0, isAsset: true },
       { id: uid(), name: "Billetera Virtual", type: "wallet", balance: 0, isAsset: true },
+      { id: uid(), name: "Wise Personal", type: "usd_personal", currency: "USD", balance: 0, isAsset: true, business: false },
+      { id: uid(), name: "Wise LLC · Amazon FBA", type: "usd_llc", currency: "USD", balance: 0, isAsset: true, business: true },
     ]);
     setBudgets([]);
   }, []);
@@ -1136,6 +1186,69 @@ function AreaChartCmp({ labels, series, color, currency, xSuffix = "" }) {
 }
 
 /* ============================================================================
+   INSIGNIA OFICIAL — "JP / SEVEN TANGOS"
+   ============================================================================ */
+// Insignia provista por el usuario: doble anillo protector, rombo esmeralda
+// de crecimiento, alas ascendentes estilo águila, monograma "JP" con
+// resplandor dorado y las 7 estrellas de "Seven Tangos" en arco superior.
+// idPrefix evita colisiones de <defs>/<filter> cuando el badge se renderiza
+// más de una vez en la misma página (Sidebar + Header al mismo tiempo en
+// desktop). showSyncDot superpone el indicador verde de sincronización en
+// tiempo real directo sobre la insignia, junto al título de la app.
+// showWordmark controla si se dibuja el texto "SEVEN TANGOS / FINANCIAL
+// SYSTEM" debajo del escudo — solo tiene sentido en tamaños grandes; en los
+// íconos chicos de navegación (32-38px) queda ilegible y se omite.
+function BrandBadge({ size = 36, idPrefix = "badge", showSyncDot = false, syncActive = false, showWordmark = false }) {
+  const goldId = idPrefix + "-champagneGold";
+  const emeraldId = idPrefix + "-emeraldAbundance";
+  const glowId = idPrefix + "-goldGlow";
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox="0 0 500 500" role="img" aria-label="JP · Seven Tangos">
+        <defs>
+          <linearGradient id={goldId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#F7E7CE" />
+            <stop offset="50%" stopColor="#D4AF7A" />
+            <stop offset="100%" stopColor="#9A7B4F" />
+          </linearGradient>
+          <linearGradient id={emeraldId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#34D399" />
+            <stop offset="50%" stopColor="#10B981" />
+            <stop offset="100%" stopColor="#059669" />
+          </linearGradient>
+          <filter id={glowId} x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="6" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+        <circle cx="250" cy="250" r="220" fill="none" stroke={"url(#" + goldId + ")"} strokeWidth="2" opacity="0.35" />
+        <circle cx="250" cy="250" r="205" fill="none" stroke={"url(#" + emeraldId + ")"} strokeWidth="1.5" opacity="0.45" />
+        <polygon points="250,110 335,250 250,390 165,250" fill={"url(#" + emeraldId + ")"} fillOpacity="0.12" stroke={"url(#" + emeraldId + ")"} strokeWidth="2" />
+        <polyline points="100,310 250,140 400,310" fill="none" stroke={"url(#" + emeraldId + ")"} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+        <polyline points="80,270 250,110 420,270" fill="none" stroke={"url(#" + goldId + ")"} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
+        <text x="250" y="268" fontFamily="Georgia, 'Times New Roman', serif" fontSize="70" fontWeight="bold" fill={"url(#" + goldId + ")"} textAnchor="middle" filter={"url(#" + glowId + ")"}>JP</text>
+        <circle cx="250" cy="65" r="7" fill={"url(#" + goldId + ")"} />
+        <circle cx="200" cy="75" r="6" fill={"url(#" + goldId + ")"} />
+        <circle cx="300" cy="75" r="6" fill={"url(#" + goldId + ")"} />
+        <circle cx="155" cy="100" r="5.5" fill={"url(#" + goldId + ")"} />
+        <circle cx="345" cy="100" r="5.5" fill={"url(#" + goldId + ")"} />
+        <circle cx="118" cy="138" r="5" fill={"url(#" + goldId + ")"} />
+        <circle cx="382" cy="138" r="5" fill={"url(#" + goldId + ")"} />
+        {showWordmark && (
+          <>
+            <text x="250" y="420" fontFamily="'Plus Jakarta Sans', 'Inter', sans-serif" fontSize="22" fontWeight="800" fill={"url(#" + goldId + ")"} textAnchor="middle" letterSpacing="5">SEVEN TANGOS</text>
+            <text x="250" y="445" fontFamily="Inter, sans-serif" fontSize="12" fontWeight="600" fill="#10B981" textAnchor="middle" letterSpacing="3">FINANCIAL SYSTEM</text>
+          </>
+        )}
+      </svg>
+      {showSyncDot && (
+        <span className={cx("absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-onyx-950", syncActive ? "bg-emerald-vivid animate-pulse" : "bg-slate-500")} title={syncActive ? "Sincronización en tiempo real activa" : "Sin conexión a la nube"}></span>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================================
    LAYOUT
    ============================================================================ */
 const NAV_ITEMS = [
@@ -1150,13 +1263,12 @@ const PAGE_LABEL = { dashboard: "Dashboard", transactions: "Transacciones", budg
 
 function Sidebar() {
   const { page, setPage, goHome } = useNav();
+  const { cloudEnabled } = useApp();
   const [collapsed, setCollapsed] = useState(false);
   return (
     <aside className={cx("hidden md:flex flex-col h-screen sticky top-0 border-r border-slate-800/70 bg-onyx-950/80 backdrop-blur-xl transition-all duration-300", collapsed ? "w-[76px]" : "w-64")}>
       <button onClick={goHome} title="Centro de Control" className="flex items-center gap-3 px-5 h-16 border-b border-slate-800/70 hover:bg-slate-800/30 transition-colors text-left">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-champagne to-champagne-light/60 shadow-glow-champagne shrink-0">
-          <Icon name="gem" size={16} className="text-onyx-950" />
-        </div>
+        <BrandBadge size={32} idPrefix="sidebar-badge" showSyncDot syncActive={cloudEnabled} />
         {!collapsed && (
           <div className="flex flex-col leading-tight">
             <span className="text-sm font-semibold font-display text-gradient-champagne tracking-wide">JP FINANCE</span>
@@ -1210,9 +1322,7 @@ function Header() {
         {/* Logo insignia — siempre visible en el Header, incluso en mobile
             donde el Sidebar con la marca queda oculto. */}
         <button onClick={goHome} title="JP Finance System — Seven Tangos" className="flex items-center gap-2.5 shrink-0">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-champagne to-champagne-light/60 shadow-glow-champagne">
-            <Icon name="gem" size={17} className="text-onyx-950" />
-          </div>
+          <BrandBadge size={38} idPrefix="header-badge" showSyncDot syncActive={cloudEnabled} />
           <span className="hidden sm:block text-sm font-semibold font-display text-gradient-champagne tracking-wide whitespace-nowrap">JP · SEVEN TANGOS</span>
         </button>
         {page !== "dashboard" && (
@@ -1289,20 +1399,49 @@ function CashBoxToday() {
   const { accounts, profile, addAccount, setAccountBalance } = useApp();
   const cash = accounts.find((a) => a.type === "cash");
   const wallet = accounts.find((a) => a.type === "wallet");
+  const wisePersonal = accounts.find((a) => a.type === "usd_personal");
+  const wiseLlc = accounts.find((a) => a.type === "usd_llc");
+  // El total consolidado de arriba es SOLO Efectivo + Billetera Virtual — la
+  // caja operativa del día a día en pesos. Las cuentas en USD se muestran
+  // aparte, con su equivalente en pesos como dato informativo, para no
+  // distorsionar el Límite de Gasto Diario ni esta caja operativa.
   const total = (cash ? cash.balance : 0) + (wallet ? wallet.balance : 0);
-  const createBox = (type) => addAccount({ name: type === "cash" ? "Efectivo" : "Billetera Virtual", type, balance: 0, isAsset: true });
+  const usdTotal = (wisePersonal ? wisePersonal.balance : 0) + (wiseLlc ? wiseLlc.balance : 0);
+  const usdTotalArs = usdTotal * (profile.usdRate || 0);
+  const createBox = (type) => {
+    const names = { cash: "Efectivo", wallet: "Billetera Virtual", usd_personal: "Wise Personal", usd_llc: "Wise LLC · Amazon FBA" };
+    const usd = type === "usd_personal" || type === "usd_llc";
+    addAccount({ name: names[type] || type, type, balance: 0, isAsset: true, currency: usd ? "USD" : "ARS", business: type === "usd_llc" });
+  };
 
-  // Arqueo rápido de caja: ajusta las dos cajas de una sola vez (por ejemplo,
-  // al contar el efectivo real que tenés en el bolsillo) sin abrir ninguna
-  // ventana — el formulario se expande dentro de la misma tarjeta.
+  // Filtro sutil de negocio vs. personal — para ver el dinero del negocio
+  // (Wise LLC / Amazon FBA) separado del dinero propio (Wise Personal).
+  const [usdFilter, setUsdFilter] = useState("all"); // all | personal | business
+  const visibleUsdAccounts = [wisePersonal, wiseLlc].filter(Boolean).filter((a) => usdFilter === "all" || (usdFilter === "personal" && !a.business) || (usdFilter === "business" && a.business));
+
+  // Arqueo rápido de caja: ajusta las cuatro cajas de uso diario de una sola
+  // vez (por ejemplo, al contar el efectivo real que tenés en el bolsillo o
+  // revisar el saldo de Wise) sin abrir ninguna ventana — el formulario se
+  // expande dentro de la misma tarjeta.
   const [arqueo, setArqueo] = useState(false);
   const [cashVal, setCashVal] = useState("");
   const [walletVal, setWalletVal] = useState("");
-  const startArqueo = () => { setCashVal(cash ? String(cash.balance) : "0"); setWalletVal(wallet ? String(wallet.balance) : "0"); setArqueo(true); };
+  const [wisePersonalVal, setWisePersonalVal] = useState("");
+  const [wiseLlcVal, setWiseLlcVal] = useState("");
+  const startArqueo = () => {
+    setCashVal(cash ? String(cash.balance) : "0");
+    setWalletVal(wallet ? String(wallet.balance) : "0");
+    setWisePersonalVal(wisePersonal ? String(wisePersonal.balance) : "0");
+    setWiseLlcVal(wiseLlc ? String(wiseLlc.balance) : "0");
+    setArqueo(true);
+  };
   const saveArqueo = () => {
     const cv = parseFloat(cashVal); const wv = parseFloat(walletVal);
+    const wpv = parseFloat(wisePersonalVal); const wlv = parseFloat(wiseLlcVal);
     if (cash && !isNaN(cv)) setAccountBalance(cash.id, cv);
     if (wallet && !isNaN(wv)) setAccountBalance(wallet.id, wv);
+    if (wisePersonal && !isNaN(wpv)) setAccountBalance(wisePersonal.id, wpv);
+    if (wiseLlc && !isNaN(wlv)) setAccountBalance(wiseLlc.id, wlv);
     setArqueo(false);
   };
 
@@ -1310,28 +1449,57 @@ function CashBoxToday() {
     <Card>
       <CardContent className="p-6">
         <div className="flex items-start justify-between mb-2">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Dinero en Caja Hoy</p>
-          {(cash || wallet) && (
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Dinero en Cajas Hoy</p>
+          {(cash || wallet || wisePersonal || wiseLlc) && (
             <Btn size="sm" variant="outline" onClick={arqueo ? saveArqueo : startArqueo}>
               <Icon name={arqueo ? "check-circle-2" : "pencil"} size={14} /> {arqueo ? "Guardar Arqueo" : "Ajustar Saldos"}
             </Btn>
           )}
         </div>
-        <div className="text-4xl font-semibold font-display text-gradient-abundance mb-5"><AmountText value={total} currency={profile.currency} /></div>
+        <div className="text-4xl font-semibold font-display text-gradient-abundance mb-1"><AmountText value={total} currency={profile.currency} /></div>
+        <p className="text-[11px] text-slate-500 mb-5">Efectivo + Billetera Virtual — tu caja operativa de todos los días</p>
         {arqueo ? (
           <div className="rounded-lg border border-champagne/30 bg-champagne/5 p-4 space-y-3 animate-fade-in">
             <p className="text-[11px] text-slate-500">Arqueo rápido: corregí el saldo real de cada caja de una sola vez.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {cash && <div><Label>💵 Efectivo</Label><Input autoFocus type="number" value={cashVal} onChange={(e) => setCashVal(e.target.value)} /></div>}
               {wallet && <div><Label>📱 Billetera Virtual</Label><Input type="number" value={walletVal} onChange={(e) => setWalletVal(e.target.value)} /></div>}
+              {wisePersonal && <div><Label>🌐 Wise Personal (USD)</Label><Input type="number" value={wisePersonalVal} onChange={(e) => setWisePersonalVal(e.target.value)} /></div>}
+              {wiseLlc && <div><Label>🏢 Wise LLC · Amazon FBA (USD)</Label><Input type="number" value={wiseLlcVal} onChange={(e) => setWiseLlcVal(e.target.value)} /></div>}
             </div>
             <button onClick={() => setArqueo(false)} className="text-xs text-slate-500 hover:text-champagne underline underline-offset-2">Cancelar</button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <CashBoxCard acc={cash} icon="banknote" missingLabel="💵 Efectivo" missingType="cash" onCreate={createBox} />
-            <CashBoxCard acc={wallet} icon="smartphone" missingLabel="📱 Billetera Virtual" missingType="wallet" onCreate={createBox} />
-          </div>
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <CashBoxCard acc={cash} icon="banknote" missingLabel="💵 Efectivo" missingType="cash" onCreate={createBox} />
+              <CashBoxCard acc={wallet} icon="smartphone" missingLabel="📱 Billetera Virtual" missingType="wallet" onCreate={createBox} />
+            </div>
+            {(wisePersonal || wiseLlc) && (
+              <div className="mt-5 pt-5 border-t border-slate-800/70">
+                <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500 uppercase tracking-wider"><Icon name="globe" size={13} className="text-cobalt" /> Cuentas en Dólares (Wise)</div>
+                  <div className="inline-flex items-center rounded-lg bg-slate-900/70 border border-slate-800 p-1 text-[11px] gap-1">
+                    {[["all", "Todo"], ["personal", "Personal"], ["business", "Negocio (LLC)"]].map(([key, label]) => (
+                      <button key={key} onClick={() => setUsdFilter(key)} className={cx("px-2.5 py-1 rounded-md font-medium transition-colors", usdFilter === key ? "bg-cobalt/20 text-cobalt" : "text-slate-500 hover:text-slate-300")}>{label}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {visibleUsdAccounts.map((a) => (
+                    <div key={a.id} className="rounded-xl border border-cobalt/20 bg-cobalt/5 p-4">
+                      <div className="flex items-center gap-2 text-sm text-slate-300 mb-2"><Icon name={a.business ? "building-2" : "globe"} size={16} className="text-cobalt" />{a.name}</div>
+                      <div className="text-2xl font-semibold font-display tabular-nums text-slate-100"><AmountText value={a.balance} currency="USD" /></div>
+                      <p className="text-[11px] text-slate-500 mt-1">≈ <AmountText value={a.balance * (profile.usdRate || 0)} currency={profile.currency} /> al tipo de cambio de referencia</p>
+                    </div>
+                  ))}
+                </div>
+                {usdTotal > 0 && (
+                  <p className="text-[11px] text-slate-500 mt-3">Total en Dólares: <span className="text-slate-300 font-medium">{formatCurrency(usdTotal, "USD")}</span> · equivalente ≈ <span className="text-slate-300 font-medium">{formatCurrency(usdTotalArs, profile.currency)}</span> — no se suma a la caja operativa en pesos de arriba.</p>
+                )}
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
@@ -1397,7 +1565,7 @@ function DailySpendLimitWidget() {
 }
 function KpiCards() {
   const { transactions, accounts, profile } = useApp();
-  const kpis = useMemo(() => computeKPIs(transactions, accounts), [transactions, accounts]);
+  const kpis = useMemo(() => computeKPIs(transactions, accounts, profile.usdRate), [transactions, accounts, profile.usdRate]);
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <Card className="relative overflow-hidden">
@@ -1432,14 +1600,19 @@ function KpiCards() {
 const FUND_GROUPS = [
   { key: "cash", label: "Efectivo", icon: "banknote", match: (a) => a.type === "cash" },
   { key: "wallet", label: "Billeteras Virtuales", icon: "smartphone", match: (a) => a.type === "wallet" },
+  { key: "usd", label: "Cuentas en Dólares (Wise)", icon: "globe", match: (a) => a.type === "usd_personal" || a.type === "usd_llc" },
   { key: "bank", label: "Cuentas Bancarias", icon: "landmark", match: (a) => a.type === "checking" || a.type === "savings" },
   { key: "investment", label: "Inversiones", icon: "trending-up", match: (a) => a.type === "investment" },
 ];
+// Plata Disponible por Fondo: el total general SÍ consolida las cuentas en
+// USD al tipo de cambio de referencia (a diferencia de la caja operativa
+// diaria en pesos) — acá estamos mirando el patrimonio completo, no el
+// gasto del día a día.
 function FundsOverview() {
   const { accounts, profile, toggleHideBalances } = useApp();
   const [expanded, setExpanded] = useState(null); // solo un fondo desplegado a la vez
   const assetAccounts = accounts.filter((a) => a.isAsset);
-  const totalAvailable = assetAccounts.reduce((s, a) => s + a.balance, 0);
+  const totalAvailable = assetAccounts.reduce((s, a) => s + accountValueArs(a, profile.usdRate), 0);
   return (
     <Card>
       <CardContent className="p-6">
@@ -1447,13 +1620,16 @@ function FundsOverview() {
           <div>
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Plata Disponible por Fondo</p>
             <div className="text-4xl font-semibold font-display text-gradient-abundance"><AmountText value={totalAvailable} currency={profile.currency} /></div>
+            <p className="text-[11px] text-slate-500 mt-1">Incluye tus cuentas en USD al tipo de cambio de referencia</p>
           </div>
           <Btn variant="outline" size="icon" onClick={toggleHideBalances}><Icon name={profile.hideBalances ? "eye-off" : "eye"} size={16} /></Btn>
         </div>
         <div className="space-y-2">
           {FUND_GROUPS.map((g) => {
             const accs = assetAccounts.filter(g.match);
+            const isUsdGroup = g.key === "usd";
             const subtotal = accs.reduce((s, a) => s + a.balance, 0);
+            const subtotalArs = accs.reduce((s, a) => s + accountValueArs(a, profile.usdRate), 0);
             const isOpen = expanded === g.key;
             return (
               <div key={g.key} className="rounded-lg border border-slate-800/60 bg-slate-900/40 overflow-hidden">
@@ -1463,7 +1639,10 @@ function FundsOverview() {
                     <div className="min-w-0"><p className="text-sm font-medium text-slate-100">{g.label}</p><p className="text-[11px] text-slate-500">{accs.length === 0 ? "Sin cuentas todavía" : accs.length + (accs.length === 1 ? " cuenta" : " cuentas")}</p></div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 pl-2">
-                    <span className="text-sm font-medium tabular-nums text-slate-100"><AmountText value={subtotal} currency={profile.currency} /></span>
+                    <div className="text-right">
+                      <span className="text-sm font-medium tabular-nums text-slate-100 block"><AmountText value={isUsdGroup ? subtotal : subtotal} currency={isUsdGroup ? "USD" : profile.currency} /></span>
+                      {isUsdGroup && subtotal > 0 && <span className="text-[10px] text-slate-500 tabular-nums">≈ {formatCurrency(subtotalArs, profile.currency)}</span>}
+                    </div>
                     <Icon name={isOpen ? "chevron-up" : "chevron-down"} size={14} className="text-slate-500" />
                   </div>
                 </button>
@@ -1474,7 +1653,7 @@ function FundsOverview() {
                     ) : accs.map((acc) => (
                       <div key={acc.id} className="flex items-center justify-between px-4 py-2.5">
                         <span className="text-sm text-slate-300">{acc.name}</span>
-                        <span className="text-sm tabular-nums text-slate-100"><AmountText value={acc.balance} currency={profile.currency} /></span>
+                        <span className="text-sm tabular-nums text-slate-100"><AmountText value={acc.balance} currency={acc.currency || profile.currency} /></span>
                       </div>
                     ))}
                   </div>
@@ -1491,7 +1670,7 @@ function ExpenseDonut() {
   const { transactions, categories, profile } = useApp();
   const data = useMemo(() => {
     const cm = monthKey(new Date().toISOString());
-    const monthExp = transactions.filter((t) => t.type === "expense" && monthKey(t.date) === cm);
+    const monthExp = filterArsOnly(transactions).filter((t) => t.type === "expense" && monthKey(t.date) === cm);
     const totals = new Map();
     monthExp.forEach((t) => totals.set(t.categoryId, (totals.get(t.categoryId) || 0) + t.amount));
     return Array.from(totals.entries()).map(([cid, value]) => {
@@ -1586,7 +1765,7 @@ function RecentTransactions() {
                 <div className="min-w-0"><p className="text-sm text-slate-100 truncate">{t.description}</p><p className="text-[11px] text-slate-500">{cat ? cat.name : "Sin categoría"} · {formatDate(t.date)}</p></div>
               </div>
               <span className={cx("text-sm font-medium tabular-nums shrink-0 pl-2", t.type === "income" ? "text-emerald-metallic" : "text-crimson-elegant")}>
-                {profile.hideBalances ? maskAmount(formatCurrency(t.amount, profile.currency)) : (t.type === "income" ? "+" : "-") + formatCurrency(t.amount, profile.currency)}
+                {profile.hideBalances ? maskAmount(formatCurrency(t.amount, t.currency || profile.currency)) : (t.type === "income" ? "+" : "-") + formatCurrency(t.amount, t.currency || profile.currency)}
               </span>
             </div>
           );
@@ -1656,11 +1835,12 @@ function MovementPanel() {
   // dispare falsas alertas de cierre de mes en rojo.
   const [isOccasional, setIsOccasional] = useState(false);
 
-  // Las dos cajas de uso diario — el resto de las cuentas (bancos, inversión,
-  // tarjeta) queda disponible como "otra cuenta" sin competir visualmente
-  // con la carga rápida de todos los días.
-  const dailyBoxes = useMemo(() => accounts.filter((a) => a.type === "cash" || a.type === "wallet"), [accounts]);
-  const otherAccounts = useMemo(() => accounts.filter((a) => a.type !== "cash" && a.type !== "wallet"), [accounts]);
+  // Las cuatro cajas de uso diario — Efectivo, Billetera Virtual y las dos
+  // cuentas en Dólares (Wise Personal / Wise LLC · Amazon FBA). El resto de
+  // las cuentas (bancos, inversión, tarjeta) queda disponible como "otra
+  // cuenta" sin competir visualmente con la carga rápida de todos los días.
+  const dailyBoxes = useMemo(() => accounts.filter((a) => DAILY_BOX_TYPES.includes(a.type)), [accounts]);
+  const otherAccounts = useMemo(() => accounts.filter((a) => !DAILY_BOX_TYPES.includes(a.type)), [accounts]);
 
   useEffect(() => {
     if (!open) return;
@@ -1691,9 +1871,10 @@ function MovementPanel() {
     } else {
       if (!categoryId) return toast({ title: "Elegí una categoría", variant: "error" });
       if (!accountId) return toast({ title: "Elegí de qué caja sale o entra la plata", variant: "error" });
-      addTransaction({ date, description: description.trim() || (selectedCategory ? selectedCategory.name : ""), amount: amt, type, categoryId, account: selectedAccount ? selectedAccount.name : "", accountId, isOccasional: type === "expense" ? isOccasional : false });
-      if (selectedAccount && (selectedAccount.type === "cash" || selectedAccount.type === "wallet")) updateProfile({ lastUsedBoxType: selectedAccount.type });
-      toast({ title: type === "income" ? "Ingreso registrado" : "Gasto registrado", description: (selectedAccount ? selectedAccount.name + " · " : "") + formatCurrency(amt, profile.currency), variant: "success" });
+      const txCurrency = isUsdAccount(selectedAccount) ? "USD" : "ARS";
+      addTransaction({ date, description: description.trim() || (selectedCategory ? selectedCategory.name : ""), amount: amt, type, categoryId, account: selectedAccount ? selectedAccount.name : "", accountId, isOccasional: type === "expense" ? isOccasional : false, currency: txCurrency });
+      if (selectedAccount && DAILY_BOX_TYPES.includes(selectedAccount.type)) updateProfile({ lastUsedBoxType: selectedAccount.type });
+      toast({ title: type === "income" ? "Ingreso registrado" : "Gasto registrado", description: (selectedAccount ? selectedAccount.name + " · " : "") + formatCurrency(amt, txCurrency), variant: "success" });
     }
     closeMovement();
   };
@@ -1714,8 +1895,11 @@ function MovementPanel() {
         {type !== "transfer" ? (
           <>
             <div className="text-center py-1">
-              <Label className="!mb-2 !text-center">Monto</Label>
+              <Label className="!mb-2 !text-center">Monto{isUsdAccount(selectedAccount) ? " (USD)" : ""}</Label>
               <Input autoFocus type="number" step="0.01" min="0" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-4xl h-20 text-center font-display font-semibold" />
+              {isUsdAccount(selectedAccount) && (
+                <p className="text-[11px] text-champagne mt-1.5 flex items-center justify-center gap-1"><Icon name="globe" size={11} /> En Dólares — {selectedAccount.name}, no afecta tu caja operativa en Pesos</p>
+              )}
             </div>
 
             {chips.length > 0 && (
@@ -1741,7 +1925,7 @@ function MovementPanel() {
               <div className="grid grid-cols-2 gap-2">
                 {dailyBoxes.map((a) => (
                   <button key={a.id} onClick={() => setAccountId(a.id)} className={cx("flex items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold transition-colors", accountId === a.id ? "border-champagne bg-champagne/15 text-champagne" : "border-slate-800 text-slate-400 hover:border-slate-700")}>
-                    <Icon name={a.type === "cash" ? "banknote" : "smartphone"} size={17} /> {a.name}
+                    <Icon name={DAILY_BOX_ICON[a.type] || "wallet"} size={17} /> {a.name}
                   </button>
                 ))}
               </div>
@@ -1856,7 +2040,7 @@ function DailySpendFilter() {
     const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 6);
     const weekAgoStr = weekAgo.toISOString().slice(0, 10);
     const inRange = (t) => (range === "today" ? t.date === todayStr : t.date >= weekAgoStr);
-    const expenses = transactions.filter((t) => t.type === "expense" && inRange(t));
+    const expenses = filterArsOnly(transactions).filter((t) => t.type === "expense" && inRange(t));
     const map = new Map();
     expenses.forEach((t) => map.set(t.categoryId, (map.get(t.categoryId) || 0) + t.amount));
     const byCategory = Array.from(map.entries()).map(([cid, value]) => {
@@ -1911,12 +2095,19 @@ function IncomeSourcesCard() {
   const [salaryDay, setSalaryDay] = useState("");
 
   const cm = monthKey(new Date().toISOString());
+  // El "Total Consolidado" se calcula SOLO con ingresos en pesos (Sueldo Fijo
+  // + Planificaciones + otros ARS) para no distorsionarlo con los payouts de
+  // Amazon FBA en dólares — esos tienen su propio total dedicado más abajo,
+  // con el equivalente en pesos como dato informativo.
   const monthIncomeTx = useMemo(() => transactions.filter((t) => t.type === "income" && monthKey(t.date) === cm), [transactions, cm]);
-  const fixedReceived = monthIncomeTx.filter((t) => t.categoryId === "cat-salary").reduce((s, t) => s + t.amount, 0);
-  const variableReceived = monthIncomeTx.filter((t) => t.categoryId === "cat-freelance").reduce((s, t) => s + t.amount, 0);
-  const otherReceived = monthIncomeTx.filter((t) => t.categoryId !== "cat-salary" && t.categoryId !== "cat-freelance").reduce((s, t) => s + t.amount, 0);
+  const arsIncomeTx = useMemo(() => filterArsOnly(monthIncomeTx), [monthIncomeTx]);
+  const fixedReceived = arsIncomeTx.filter((t) => t.categoryId === "cat-salary").reduce((s, t) => s + t.amount, 0);
+  const variableReceived = arsIncomeTx.filter((t) => t.categoryId === "cat-freelance").reduce((s, t) => s + t.amount, 0);
+  const otherReceived = arsIncomeTx.filter((t) => t.categoryId !== "cat-salary" && t.categoryId !== "cat-freelance").reduce((s, t) => s + t.amount, 0);
   const totalReceived = fixedReceived + variableReceived + otherReceived;
   const salaryAlreadyLogged = fixedReceived > 0;
+  const amazonReceivedUsd = monthIncomeTx.filter((t) => t.categoryId === "cat-amazon").reduce((s, t) => s + t.amount, 0);
+  const amazonReceivedArs = amazonReceivedUsd * (profile.usdRate || 0);
 
   const startEditSalary = () => { setSalaryAmt(String(profile.fixedSalaryAmount || 0)); setSalaryDay(String(profile.fixedSalaryDay || 1)); setEditingSalary(true); };
   const saveSalary = () => {
@@ -1926,10 +2117,10 @@ function IncomeSourcesCard() {
 
   return (
     <Card>
-      <CardHeader><div className="flex items-center gap-2"><Icon name="wallet" size={15} className="text-champagne" /><CardTitle className="!text-slate-300">Ingresos del Mes</CardTitle></div><CardDescription>Sueldo fijo + planificaciones online</CardDescription></CardHeader>
+      <CardHeader><div className="flex items-center gap-2"><Icon name="wallet" size={15} className="text-champagne" /><CardTitle className="!text-slate-300">Ingresos del Mes</CardTitle></div><CardDescription>Sueldo fijo + planificaciones online + Amazon FBA</CardDescription></CardHeader>
       <CardContent className="space-y-3">
         <div className="flex items-center justify-between rounded-lg border border-slate-800/70 bg-slate-900/40 px-4 py-3">
-          <span className="text-sm text-slate-300">Total Consolidado</span>
+          <span className="text-sm text-slate-300">Total Consolidado (ARS)</span>
           <span className="text-xl font-semibold font-display tabular-nums text-champagne"><AmountText value={totalReceived} currency={profile.currency} /></span>
         </div>
 
@@ -1962,6 +2153,15 @@ function IncomeSourcesCard() {
           </div>
           <p className="text-lg font-semibold font-display tabular-nums text-slate-100 mt-2"><AmountText value={variableReceived} currency={profile.currency} /></p>
           <p className="text-[11px] text-slate-500 mt-0.5">Suma de cada cobro de cliente cargado este mes</p>
+        </div>
+
+        <div className="rounded-lg border border-cobalt/25 bg-cobalt/5 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-slate-100"><Icon name="package" size={15} className="text-cobalt" /> Amazon FBA · Wise LLC</div>
+            <Btn size="sm" variant="outline" onClick={() => openMovement("income", "cat-amazon")}><Icon name="plus" size={13} /> Sumar Payout</Btn>
+          </div>
+          <p className="text-lg font-semibold font-display tabular-nums text-slate-100 mt-2"><AmountText value={amazonReceivedUsd} currency="USD" /></p>
+          <p className="text-[11px] text-slate-500 mt-0.5">≈ {formatCurrency(amazonReceivedArs, profile.currency)} · payouts del negocio este mes, no suma al Total Consolidado en pesos</p>
         </div>
       </CardContent>
     </Card>
@@ -2121,7 +2321,7 @@ function DashboardPage() {
           step="1"
           icon="wallet"
           title="¿Cuánto dinero tengo hoy en mis Cajas?"
-          subtitle="Efectivo vs Billetera Virtual, siempre al día"
+          subtitle="Efectivo, Billetera Virtual y tus cuentas en Dólares (Wise), siempre al día"
         />
         <div className="space-y-4">
           <CashBoxToday />
@@ -2148,7 +2348,7 @@ function DashboardPage() {
           step="3"
           icon="trending-up"
           title="¿Cómo viene mi ritmo de Ingresos del mes?"
-          subtitle="Sueldo Fijo + Planificaciones Online"
+          subtitle="Sueldo Fijo + Planificaciones Online + Amazon FBA"
         />
         <div className="space-y-4">
           <IncomeSourcesCard />
@@ -2209,7 +2409,7 @@ function TransactionFormModal({ open, onClose, editing }) {
     if (!form.description.trim()) return toast({ title: "Falta la descripción", variant: "error" });
     if (isNaN(amount) || amount <= 0) return toast({ title: "El monto debe ser mayor a cero", variant: "error" });
     if (!form.categoryId) return toast({ title: "Seleccioná una categoría", variant: "error" });
-    const payload = { date: form.date, description: form.description.trim(), amount, type: form.type, categoryId: form.categoryId, account: selectedAccount ? selectedAccount.name : "", accountId: form.accountId || undefined, notes: form.notes.trim() || undefined, isRecurring: form.isRecurring, recurrence: form.isRecurring ? { frequency: form.frequency, nextDate: nextOccurrence(form.date, form.frequency), active: true } : undefined, isOccasional: form.type === "expense" ? form.isOccasional : false };
+    const payload = { date: form.date, description: form.description.trim(), amount, type: form.type, categoryId: form.categoryId, account: selectedAccount ? selectedAccount.name : "", accountId: form.accountId || undefined, notes: form.notes.trim() || undefined, isRecurring: form.isRecurring, recurrence: form.isRecurring ? { frequency: form.frequency, nextDate: nextOccurrence(form.date, form.frequency), active: true } : undefined, isOccasional: form.type === "expense" ? form.isOccasional : false, currency: isUsdAccount(selectedAccount) ? "USD" : "ARS" };
     if (editing) { updateTransaction(editing.id, payload); toast({ title: "Transacción actualizada", variant: "success" }); }
     else { addTransaction(payload); toast({ title: "Transacción registrada", variant: "success" }); }
     onClose();
@@ -2223,12 +2423,12 @@ function TransactionFormModal({ open, onClose, editing }) {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div><Label>Fecha</Label><Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} required /></div>
-          <div><Label>Monto</Label><Input type="number" step="0.01" min="0" placeholder="0.00" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} required /></div>
+          <div><Label>Monto{isUsdAccount(selectedAccount) ? " (USD)" : ""}</Label><Input type="number" step="0.01" min="0" placeholder="0.00" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} required /></div>
         </div>
         <div><Label>Descripción</Label><Input placeholder="Ej: Supermercado, Salario..." value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} required /></div>
         <div className="grid grid-cols-2 gap-3">
           <div><Label>Categoría</Label><Select value={form.categoryId} onChange={(v) => setForm((f) => ({ ...f, categoryId: v }))}><option value="">Elegir...</option>{filteredCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></div>
-          <div><Label>Cuenta</Label><Select value={form.accountId} onChange={(v) => setForm((f) => ({ ...f, accountId: v }))}><option value="">Elegir...</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select></div>
+          <div><Label>Cuenta</Label><Select value={form.accountId} onChange={(v) => setForm((f) => ({ ...f, accountId: v }))}><option value="">Elegir...</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}{isUsdAccount(a) ? " (USD)" : ""}</option>)}</Select></div>
         </div>
         <div><Label>Notas (opcional)</Label><Textarea placeholder="Detalles adicionales..." value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} /></div>
         <div className="flex items-center justify-between rounded-lg border border-slate-800 px-4 py-3">
@@ -2301,7 +2501,7 @@ function RecurringPanel() {
                 <div className="min-w-0"><p className="text-sm text-slate-100 truncate">{t.description}</p><p className="text-[11px] text-slate-500">{cat ? cat.name : ""} · {FREQ_LABEL[t.recurrence.frequency]} · Próximo: {formatDate(t.recurrence.nextDate)}</p></div>
               </div>
               <div className="flex items-center gap-3 shrink-0">
-                <span className={cx("text-sm font-medium tabular-nums", t.type === "income" ? "text-emerald-metallic" : "text-crimson-elegant")}>{formatCurrency(t.amount, profile.currency)}</span>
+                <span className={cx("text-sm font-medium tabular-nums", t.type === "income" ? "text-emerald-metallic" : "text-crimson-elegant")}>{formatCurrency(t.amount, t.currency || profile.currency)}</span>
                 {isDue && <Btn variant="outline" size="sm" onClick={() => processNow(t.id)}><Icon name="play" size={14} /> Procesar</Btn>}
               </div>
             </div>
@@ -2397,7 +2597,7 @@ function TransactionsTable({ onEdit }) {
                     <td className="px-3 py-3"><span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs" style={{ backgroundColor: (cat ? cat.color : "#94A3B8") + "1A", color: cat ? cat.color : "#94A3B8" }}>{cat ? cat.name : "Sin categoría"}</span></td>
                     <td className="px-3 py-3 text-slate-400 hidden md:table-cell">{t.account}</td>
                     <td className={cx("px-3 py-3 text-right font-medium tabular-nums", t.type === "income" ? "text-emerald-metallic" : "text-crimson-elegant")}>
-                      {profile.hideBalances ? maskAmount(formatCurrency(t.amount, profile.currency)) : (t.type === "income" ? "+" : "-") + formatCurrency(t.amount, profile.currency)}
+                      {profile.hideBalances ? maskAmount(formatCurrency(t.amount, t.currency || profile.currency)) : (t.type === "income" ? "+" : "-") + formatCurrency(t.amount, t.currency || profile.currency)}
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-1">
@@ -2450,8 +2650,8 @@ function Rule502030Card() {
   const { transactions, categories, profile } = useApp();
   const { groupTotals, income } = useMemo(() => {
     const cm = monthKey(new Date().toISOString());
-    const monthExp = transactions.filter((t) => t.type === "expense" && monthKey(t.date) === cm);
-    const monthInc = transactions.filter((t) => t.type === "income" && monthKey(t.date) === cm).reduce((s, t) => s + t.amount, 0);
+    const monthExp = filterArsOnly(transactions).filter((t) => t.type === "expense" && monthKey(t.date) === cm);
+    const monthInc = filterArsOnly(transactions).filter((t) => t.type === "income" && monthKey(t.date) === cm).reduce((s, t) => s + t.amount, 0);
     const totals = { needs: 0, wants: 0, savings: 0 };
     monthExp.forEach((t) => { const cat = categories.find((c) => c.id === t.categoryId); if (cat) totals[cat.budgetGroup] += t.amount; });
     return { groupTotals: totals, income: monthInc };
@@ -2488,7 +2688,7 @@ function BudgetLimits() {
   const monthBudgets = budgets.filter((b) => b.month === cm);
   const rows = useMemo(() => monthBudgets.map((b) => {
     const cat = categories.find((c) => c.id === b.categoryId);
-    const spent = transactions.filter((t) => t.type === "expense" && t.categoryId === b.categoryId && monthKey(t.date) === cm).reduce((s, t) => s + t.amount, 0);
+    const spent = filterArsOnly(transactions).filter((t) => t.type === "expense" && t.categoryId === b.categoryId && monthKey(t.date) === cm).reduce((s, t) => s + t.amount, 0);
     const percent = b.monthlyLimit > 0 ? (spent / b.monthlyLimit) * 100 : 0;
     return { budget: b, category: cat, spent, percent };
   }).sort((a, b) => b.percent - a.percent), [monthBudgets, categories, transactions]);
@@ -2754,7 +2954,7 @@ function buildAIPrompt(data, profile) {
 function AICopilotPage() {
   const { transactions, categories, accounts, profile } = useApp();
   const { toast } = useToast();
-  const data = useMemo(() => computeCopilotDiagnostics(transactions, categories, accounts), [transactions, categories, accounts]);
+  const data = useMemo(() => computeCopilotDiagnostics(transactions, categories, accounts, profile.usdRate), [transactions, categories, accounts, profile.usdRate]);
   const copyPrompt = async () => {
     const prompt = buildAIPrompt(data, profile);
     try {
@@ -2825,12 +3025,23 @@ const SQL_SCHEMA = "-- Ver schema.sql entregado junto a este archivo.\\n-- Tabla
 function ProfileCard() {
   const { profile, updateProfile } = useApp();
   const CURRENCIES = ["ARS", "USD", "EUR", "GBP", "CHF"];
+  const [rateField, setRateField] = useState(String(profile.usdRate || ""));
+  useEffect(() => { setRateField(String(profile.usdRate || "")); }, [profile.usdRate]);
+  const saveRate = () => { const v = parseFloat(rateField); if (!isNaN(v) && v > 0) updateProfile({ usdRate: v }); };
   return (
     <Card>
       <CardHeader><CardTitle>Perfil</CardTitle><CardDescription>Preferencias personales y de privacidad</CardDescription></CardHeader>
       <CardContent className="space-y-4">
         <div><Label>Nombre</Label><Input value={profile.fullName} onChange={(e) => updateProfile({ fullName: e.target.value })} /></div>
         <div><Label>Moneda</Label><Select value={profile.currency} onChange={(v) => updateProfile({ currency: v })}>{CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}</Select></div>
+        <div>
+          <Label>Tipo de Cambio de Referencia (USD → ARS)</Label>
+          <div className="flex gap-2">
+            <Input type="number" min="0" step="0.01" value={rateField} onChange={(e) => setRateField(e.target.value)} onBlur={saveRate} />
+            <Btn variant="outline" onClick={saveRate}><Icon name="refresh-cw" size={14} /> Actualizar</Btn>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1.5">Se usa solo para consolidar Wise Personal y Wise LLC · Amazon FBA en la vista general de Patrimonio — nunca distorsiona tu caja operativa diaria en Pesos.</p>
+        </div>
         <div className="flex items-center justify-between rounded-lg border border-slate-800 px-4 py-3">
           <div><p className="text-sm font-medium text-slate-100">Ocultar Saldos por Defecto</p><p className="text-[11px] text-slate-500">Modo privacidad al abrir la app</p></div>
           <Switch checked={profile.hideBalances} onChange={(v) => updateProfile({ hideBalances: v })} />
@@ -2898,26 +3109,32 @@ function CloudSyncCard() {
 function AccountsCard() {
   const { accounts, addAccount, deleteAccount, profile } = useApp();
   const [open, setOpen] = useState(false); const [form, setForm] = useState({ name: "", type: "cash", balance: "", isAsset: true });
-  const addNew = () => { if (!form.name) return; addAccount({ name: form.name, type: form.type, balance: parseFloat(form.balance) || 0, isAsset: form.isAsset }); setForm({ name: "", type: "cash", balance: "", isAsset: true }); setOpen(false); };
+  const addNew = () => {
+    if (!form.name) return;
+    const usd = form.type === "usd_personal" || form.type === "usd_llc";
+    addAccount({ name: form.name, type: form.type, balance: parseFloat(form.balance) || 0, isAsset: form.isAsset, currency: usd ? "USD" : "ARS", business: form.type === "usd_llc" });
+    setForm({ name: "", type: "cash", balance: "", isAsset: true });
+    setOpen(false);
+  };
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <div><CardTitle>Tus Fondos y Cuentas</CardTitle><CardDescription>Efectivo, billeteras virtuales, bancos, inversiones y tarjetas</CardDescription></div>
+        <div><CardTitle>Tus Fondos y Cuentas</CardTitle><CardDescription>Efectivo, billeteras virtuales, cuentas en dólares, bancos, inversiones y tarjetas</CardDescription></div>
         <Btn size="sm" variant="outline" onClick={() => setOpen((o) => !o)}><Icon name="plus" size={14} /> Agregar Cuenta</Btn>
       </CardHeader>
       <CardContent className="space-y-2">
         {accounts.length === 0 && <p className="text-sm text-slate-500 py-4 text-center">Todavía no tenés cuentas cargadas. Agregá la primera.</p>}
         {accounts.map((acc) => (
           <div key={acc.id} className="flex items-center justify-between rounded-lg border border-slate-800/60 bg-slate-900/40 px-4 py-3">
-            <div><p className="text-sm text-slate-100">{acc.name}</p><p className="text-[11px] text-slate-500">{ACCOUNT_TYPE_LABEL[acc.type]} · {acc.isAsset ? "Plata a favor" : "Deuda"}</p></div>
-            <div className="flex items-center gap-3"><span className="text-sm font-medium tabular-nums text-slate-100">{formatCurrency(acc.balance, profile.currency)}</span><button onClick={() => deleteAccount(acc.id)}><Icon name="trash-2" size={14} className="text-slate-500 hover:text-crimson-elegant" /></button></div>
+            <div><p className="text-sm text-slate-100">{acc.name}</p><p className="text-[11px] text-slate-500">{ACCOUNT_TYPE_LABEL[acc.type] || acc.type} · {acc.isAsset ? "Plata a favor" : "Deuda"}{acc.business ? " · Negocio" : ""}</p></div>
+            <div className="flex items-center gap-3"><span className="text-sm font-medium tabular-nums text-slate-100">{formatCurrency(acc.balance, acc.currency || profile.currency)}</span><button onClick={() => deleteAccount(acc.id)}><Icon name="trash-2" size={14} className="text-slate-500 hover:text-crimson-elegant" /></button></div>
           </div>
         ))}
         <Panel open={open} onClose={() => setOpen(false)} title="Nueva Cuenta">
           <div className="space-y-4">
             <div><Label>Nombre</Label><Input placeholder="Ej: Mercado Pago, Efectivo, Banco Galicia..." value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
             <div><Label>Tipo de Fondo</Label><Select value={form.type} onChange={(v) => setForm((f) => ({ ...f, type: v }))}>{Object.entries(ACCOUNT_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></div>
-            <div><Label>Saldo</Label><Input type="number" value={form.balance} onChange={(e) => setForm((f) => ({ ...f, balance: e.target.value }))} /></div>
+            <div><Label>Saldo{(form.type === "usd_personal" || form.type === "usd_llc") ? " (USD)" : ""}</Label><Input type="number" value={form.balance} onChange={(e) => setForm((f) => ({ ...f, balance: e.target.value }))} /></div>
             <div className="flex items-center justify-between rounded-lg border border-slate-800 px-4 py-3"><p className="text-sm text-slate-100">Es plata a favor (no una deuda)</p><Switch checked={form.isAsset} onChange={(v) => setForm((f) => ({ ...f, isAsset: v }))} /></div>
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-2 gap-2 sm:gap-0">
               <Btn variant="ghost" onClick={() => setOpen(false)}>Cancelar</Btn>
